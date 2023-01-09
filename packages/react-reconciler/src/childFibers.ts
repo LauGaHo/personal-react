@@ -5,6 +5,7 @@ import { Placement } from './fiberFlags';
 import { HostText } from './workTags';
 
 function ChildReconciler(shouldTrackEffects: boolean) {
+	// 根据 ReactElementType 生成对应的 fiberNode 节点
 	function reconcileSingleElement(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
@@ -16,6 +17,7 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
+	// 根据对应的 textContent 生成文本节点对应的 fiberNode 节点
 	function reconcileSingleTextNode(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
@@ -26,6 +28,7 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
+	// 判断是否需要打 flag
 	function placeSingleChild(fiber: FiberNode) {
 		if (shouldTrackEffects && fiber.alternate === null) {
 			fiber.flags |= Placement;
@@ -33,6 +36,7 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
+	// 返回给外界用于根据 element 不同类型生成不同的 fiberNode 的方法
 	return function reconcileChildFibers(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
