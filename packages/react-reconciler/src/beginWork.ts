@@ -24,6 +24,7 @@ export const beginWork = (wip: FiberNode) => {
 			}
 			break;
 	}
+	return null;
 };
 
 // 针对 HostRootFiber 的 mount 逻辑
