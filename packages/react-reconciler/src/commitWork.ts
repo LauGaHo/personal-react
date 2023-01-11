@@ -9,6 +9,7 @@ let nextEffect: FiberNode | null = null;
 export const commitMutationEffects = (finishedWork: FiberNode) => {
 	nextEffect = finishedWork;
 
+	// 总的遍历方式：一直往下遍历，直到 subtreeFlags 为 NoFlags；其次从其 sibling 出发；最后向上进行归操作
 	while (nextEffect !== null) {
 		// 向下遍历
 		const child: FiberNode | null = nextEffect.child;
@@ -17,8 +18,10 @@ export const commitMutationEffects = (finishedWork: FiberNode) => {
 			(nextEffect.subtreeFlags & MutationMask) !== NoFlags &&
 			child !== null
 		) {
+			// 节点的 subtreeFlags 不为 NoFlags
 			nextEffect = child;
 		} else {
+			// 节点的 subtreeFlags 为空 && (节点的 flags 不为 NoFlags 或为 NoFlags)
 			up: while (nextEffect !== null) {
 				commitMutationEffectsOnFiber(nextEffect);
 				const sibling: FiberNode | null = nextEffect.sidling;
