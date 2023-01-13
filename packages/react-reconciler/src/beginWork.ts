@@ -3,8 +3,14 @@
 import { ReactElementType } from 'shared/ReactTypes';
 import { mountChildFibers, reconcileChildFibers } from './childFibers';
 import { FiberNode } from './fiber';
+import { renderWithHooks } from './fiberHooks';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
-import { HostComponent, HostRoot, HostText } from './workTags';
+import {
+	FunctionComponent,
+	HostComponent,
+	HostRoot,
+	HostText
+} from './workTags';
 
 export const beginWork = (wip: FiberNode) => {
 	// 比较，并返回子 fiberNode
@@ -18,6 +24,9 @@ export const beginWork = (wip: FiberNode) => {
 		case HostText:
 			return null;
 
+		case FunctionComponent:
+			return updateFunctionComponent(wip);
+
 		default:
 			if (__DEV__) {
 				console.warn('beginWork为实现的类型');
@@ -26,6 +35,12 @@ export const beginWork = (wip: FiberNode) => {
 	}
 	return null;
 };
+
+function updateFunctionComponent(wip: FiberNode) {
+	const nextChildren = renderWithHooks(wip);
+	reconcileChildren(wip, nextChildren);
+	return wip.child;
+}
 
 // 针对 HostRootFiber 的 mount 逻辑
 function updateHostRoot(wip: FiberNode) {
