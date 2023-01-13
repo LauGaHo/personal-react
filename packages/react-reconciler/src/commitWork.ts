@@ -59,11 +59,13 @@ const commitPlacement = (finishedWork: FiberNode) => {
 	// parent DOM
 	const hostParent = getHostParent(finishedWork);
 	// 找到 finished 对应的 DOM，并将其 append 到 hostParent 中
-	appendPlacementNodeIntoContainer(finishedWork, hostParent);
+	if (hostParent !== null) {
+		appendPlacementNodeIntoContainer(finishedWork, hostParent);
+	}
 };
 
 // 获取当前 fiberNode 对应 DOM 的父 DOM 节点
-function getHostParent(fiber: FiberNode): Container {
+function getHostParent(fiber: FiberNode): Container | null {
 	let parent = fiber.return;
 
 	// 不断向上找，直到找到 tag 为 HostComponent 或 HostRoot 类型的 fiberNode 对应的 DOM 节点
@@ -82,6 +84,8 @@ function getHostParent(fiber: FiberNode): Container {
 	if (__DEV__) {
 		console.warn('未找到 host parent');
 	}
+
+	return null;
 }
 
 // 执行 Placement 对应的副作用，将对应的 fiberNode 的 DOM 挂载到其父 DOM 节点
@@ -91,7 +95,7 @@ function appendPlacementNodeIntoContainer(
 ) {
 	// 期望 fiberNode 的 tag 为 HostComponent 或者 HostText
 	if (finishedWork.tag === HostComponent || finishedWork.tag === HostText) {
-		appendChildToContainer(finishedWork.stateNode, hostParent);
+		appendChildToContainer(hostParent, finishedWork.stateNode);
 		return;
 	}
 

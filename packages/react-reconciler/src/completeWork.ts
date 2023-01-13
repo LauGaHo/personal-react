@@ -1,5 +1,6 @@
 import {
 	appendInitialChild,
+	Container,
 	createInstance,
 	createTextInstance
 } from 'hostConfig';
@@ -21,7 +22,8 @@ export const completeWork = (wip: FiberNode) => {
 				// mount
 				// 1. 构建 DOM
 				// 2. 将 DOM 插入到 DOM 树
-				const instance = createInstance(wip.type, newProps);
+				// const instance = createInstance(wip.type, newProps);
+				const instance = createInstance(wip.type);
 				appendAllChildren(instance, wip);
 				wip.stateNode = instance;
 			}
@@ -54,7 +56,7 @@ export const completeWork = (wip: FiberNode) => {
 };
 
 // 将 wip.child 对应的 DOM 挂载到刚创建出来的 DOM 上，形成一棵离屏的 DOM 树
-function appendAllChildren(parent: FiberNode, wip: FiberNode) {
+function appendAllChildren(parent: Container, wip: FiberNode) {
 	// 获取当前 wip 的子节点 fiberNode
 	let node = wip.child;
 
