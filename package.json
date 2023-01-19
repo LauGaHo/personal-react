@@ -7,12 +7,15 @@
 		"lint": "eslint --ext .ts,.js,.jsx,.tsx --fix --quiet ./packages",
 		"build:dev": "rimraf dist && rollup --bundleConfigAsCjs --config scripts/rollup/dev.config.js",
 		"demo": "vite serve demos/test-fc --config scripts/vite/vite.config.js --force",
-    "test": "jest --config scripts/jest/jest.config.js"
+		"test": "jest --config scripts/jest/jest.config.js"
 	},
 	"keywords": [],
 	"author": "",
 	"license": "ISC",
 	"devDependencies": {
+		"@babel/core": "^7.20.12",
+		"@babel/plugin-transform-react-jsx": "^7.20.7",
+		"@babel/preset-env": "^7.20.2",
 		"@commitlint/cli": "^17.4.0",
 		"@commitlint/config-conventional": "^17.4.0",
 		"@rollup/plugin-alias": "^4.0.2",
