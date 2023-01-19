@@ -5,13 +5,18 @@ import {
 	createTextInstance
 } from 'hostConfig';
 import { FiberNode } from './fiber';
-import { NoFlags } from './fiberFlags';
+import { NoFlags, Update } from './fiberFlags';
 import {
 	FunctionComponent,
 	HostComponent,
 	HostRoot,
 	HostText
 } from './workTags';
+
+// 标记更新 flags
+function markUpdate(fiber: FiberNode) {
+	fiber.flags |= Update;
+}
 
 export const completeWork = (wip: FiberNode) => {
 	// 递归中的归
@@ -38,6 +43,14 @@ export const completeWork = (wip: FiberNode) => {
 		case HostText:
 			if (current !== null && wip.stateNode) {
 				// update
+				// 获取旧的 text
+				const oldText = current.memoizedProps.content;
+				// 获取新的 text
+				const newText = newProps.content;
+				// 比对 oldText 和 newText 是否相同，不同则标记 Update 的 flags
+				if (oldText !== newText) {
+					markUpdate(wip);
+				}
 			} else {
 				// mount
 				// 1. 构建 DOM
