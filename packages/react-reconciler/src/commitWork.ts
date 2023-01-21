@@ -105,7 +105,7 @@ function commitDeletion(childToDelete: FiberNode) {
 				return;
 
 			case FunctionComponent:
-				// TODO useEffect unmount
+				// TODO useEffect unmount，解绑 ref
 				return;
 
 			default:
@@ -121,7 +121,7 @@ function commitDeletion(childToDelete: FiberNode) {
 		const hostParent = getHostParent(rootHostNode);
 		if (hostParent !== null) {
 			// 调用 removeChild 函数删除 hostParent 下的 rootHostNode 子节点
-			removeChild(rootHostNode, hostParent);
+			removeChild((rootHostNode as FiberNode).stateNode, hostParent);
 		}
 	}
 	// 置空对应的 fiberNode 对应的属性，因为 childToDelete 对应的 DOM 已经被删除了

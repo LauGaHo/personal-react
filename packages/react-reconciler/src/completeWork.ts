@@ -120,7 +120,7 @@ function bubbleProperties(wip: FiberNode) {
 
 	while (child !== null) {
 		subtreeFlags |= child.subtreeFlags;
-		subtreeFlags |= wip.flags;
+		subtreeFlags |= child.flags;
 
 		child.return = wip;
 		child = child.sidling;
