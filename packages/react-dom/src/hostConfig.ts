@@ -56,3 +56,12 @@ export function removeChild(
 ) {
 	container.removeChild(child);
 }
+
+// 将目标 DOM 插入到容器中某个 DOM 的前面
+export function insertChildToContainer(
+	child: Instance,
+	container: Container,
+	before: Instance
+) {
+	container.insertBefore(child, before);
+}

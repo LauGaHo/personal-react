@@ -2,6 +2,8 @@ import {
 	appendChildToContainer,
 	commitUpdate,
 	Container,
+	insertChildToContainer,
+	Instance,
 	removeChild
 } from 'hostConfig';
 import { FiberNode, FiberRootNode } from './fiber';
@@ -172,11 +174,69 @@ const commitPlacement = (finishedWork: FiberNode) => {
 	}
 	// parent DOM
 	const hostParent = getHostParent(finishedWork);
+
+	// 为了实现 parentNode.insertBefore 需要找到「目标兄弟 Host 节点」
+	const sibling = getHostSibling(finishedWork);
+
 	// 找到 finished 对应的 DOM，并将其 append 到 hostParent 中
 	if (hostParent !== null) {
-		appendPlacementNodeIntoContainer(finishedWork, hostParent);
+		insertOrAppendPlacementNodeIntoContainer(finishedWork, hostParent, sibling);
 	}
 };
+
+// 获取目标节点最近的、可用的兄弟节点的有效 DOM
+function getHostSibling(fiber: FiberNode) {
+	// 将目标节点赋值给 node 变量
+	let node: FiberNode = fiber;
+
+	// 定义了一个查找目标节点最近的、可用的兄弟节点的有效 DOM 循环
+	findSibling: while (true) {
+		// 如果该节点没有兄弟节点，则回溯向上一级，查找父节点的兄弟节点
+		while (node.sidling === null) {
+			// 将 node 的父节点赋值给 parent 变量
+			const parent = node.return;
+
+			// 终止条件
+			if (
+				parent === null ||
+				parent.tag === HostComponent ||
+				parent.tag === HostRoot
+			) {
+				return null;
+			}
+			// 循环赋值 node 变量
+			node = parent;
+		}
+		// 补充 node.sibling.return 属性
+		node.sidling.return = node.return;
+		// 循环赋值 node 变量
+		node = node.sidling;
+
+		// 当该 fiberNode 并不是有效的 DOM，则向下寻找下一级的有效 DOM
+		while (node.tag !== HostText && node.tag !== HostComponent) {
+			// 向下遍历，寻找子孙节点
+			if ((node.flags & Placement) !== NoFlags) {
+				// 代表该兄弟节点是不稳定的，所以继续寻找下一个兄弟节点
+				continue findSibling;
+			}
+
+			if (node.child === null) {
+				// 如果遍历到底了，那么向上一级，从父节点的兄弟节点下手继续往下找
+				continue findSibling;
+			} else {
+				// 如果还没有到底，则继续往下寻找
+				node.child.return = node;
+				// 循环赋值变量 node
+				node = node.child;
+			}
+		}
+
+		if ((node.flags & Placement) === NoFlags) {
+			// 相当于找到了目标的兄弟节点 DOM
+			return node.stateNode;
+		}
+	}
+}
 
 // 获取当前 fiberNode 对应 DOM 的父 DOM 节点
 function getHostParent(fiber: FiberNode): Container | null {
@@ -203,23 +263,33 @@ function getHostParent(fiber: FiberNode): Container | null {
 }
 
 // 执行 Placement 对应的副作用，将对应的 fiberNode 的 DOM 挂载到其父 DOM 节点
-function appendPlacementNodeIntoContainer(
+function insertOrAppendPlacementNodeIntoContainer(
 	finishedWork: FiberNode,
-	hostParent: Container
+	hostParent: Container,
+	before?: Instance
 ) {
 	// 期望 fiberNode 的 tag 为 HostComponent 或者 HostText
 	if (finishedWork.tag === HostComponent || finishedWork.tag === HostText) {
-		appendChildToContainer(hostParent, finishedWork.stateNode);
+		if (before) {
+			insertChildToContainer(finishedWork.stateNode, hostParent, before);
+		} else {
+			appendChildToContainer(hostParent, finishedWork.stateNode);
+		}
+
 		return;
 	}
 
+	// 如果 finishedWork 变量的类型不为 HostComponent 或 HostText，则向下查找，直到找到类型为 HostComponent 或 HostText 的 fiberNode
 	const child = finishedWork.child;
+	// 往下查找 DOM
 	if (child !== null) {
-		appendPlacementNodeIntoContainer(child, hostParent);
+		insertOrAppendPlacementNodeIntoContainer(child, hostParent);
+		// 将所有兄弟节点同样挂载到页面上
 		let sibling = child.sidling;
 
+		// 循环挂载所有的兄弟节点
 		while (sibling !== null) {
-			appendPlacementNodeIntoContainer(sibling, hostParent);
+			insertOrAppendPlacementNodeIntoContainer(sibling, hostParent);
 			sibling = sibling.sidling;
 		}
 	}
