@@ -91,7 +91,7 @@ function recordHostChildrenToDelete(
 ) {
 	// 1. 找到第一个 root host 节点
 	// 获取 childToDelete 数组最后一个元素
-	let lastOne = childrenToDelete[childrenToDelete.length - 1];
+	const lastOne = childrenToDelete[childrenToDelete.length - 1];
 
 	if (!lastOne) {
 		// 如果 lastOne 为 0，说明当前 childToDelete 数组为空
