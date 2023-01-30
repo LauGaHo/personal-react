@@ -5,6 +5,7 @@ import { Update } from './fiberFlags';
 // 定义 Update
 export interface Update<State> {
 	action: Action<State>;
+	next: Update<any> | null;
 }
 
 // 定义 UpdateQueue
@@ -18,7 +19,8 @@ export interface UpdateQueue<State> {
 // 创建 Update 对象
 export const createUpdate = <State>(action: Action<State>): Update<State> => {
 	return {
-		action
+		action,
+		next: null
 	};
 };
 
@@ -37,6 +39,21 @@ export const enqueueUpdate = <State>(
 	updateQueue: UpdateQueue<State>,
 	update: Update<State>
 ) => {
+	updateQueue.shared.pending = update;
+
+	const pending = updateQueue.shared.pending;
+	if (pending === null) {
+		// 如果当前 pending 为空，说明当前的 updateQueue 为空，所以将传进来的 update 对象的 next 指针指向它自己
+		// pending -> a -> a
+		// pending 指向的是这个链表最新插入的 update
+		update.next = update;
+	} else {
+		// pending = b -> a -> b
+		// pending = c -> a -> b -> c
+		// 所以由上可知，pending 指向最新插入的 update，pending.next 指向第一个插入的 update
+		update.next = pending.next;
+		pending.next = update;
+	}
 	updateQueue.shared.pending = update;
 };
 
