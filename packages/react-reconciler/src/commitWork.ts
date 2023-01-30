@@ -85,25 +85,49 @@ const commitMutationEffectsOnFiber = (finishedWork: FiberNode) => {
 	}
 };
 
+function recordHostChildrenToDelete(
+	childrenToDelete: FiberNode[],
+	unmountFiber: FiberNode
+) {
+	// 1. 找到第一个 root host 节点
+	// 获取 childToDelete 数组最后一个元素
+	let lastOne = childrenToDelete[childrenToDelete.length - 1];
+
+	if (!lastOne) {
+		// 如果 lastOne 为 0，说明当前 childToDelete 数组为空
+		childrenToDelete.push(unmountFiber);
+	} else {
+		// 获取当前 childToDelete 数组最右一个元素的 sibling
+		let node = lastOne.sidling;
+		// 循环找出 lastOne 关联的所有元素
+		while (node !== null) {
+			// 如果当前 node 变量所记录的 fiberNode 节点是否全等于传入的 unmountFiber 节点
+			if (unmountFiber === node) {
+				// 将传入的 unmountFiber 变量中的 fiberNode 丢进 childrenToDelete
+				childrenToDelete.push(unmountFiber);
+			}
+			// 循环赋值 node 变量
+			node = node.sidling;
+		}
+	}
+	// 2. 没找到一个 host 节点，判断一下这个节点是不是第 1 找到那个节点的兄弟节点
+}
+
 // 提交 Delete 操作函数逻辑
 function commitDeletion(childToDelete: FiberNode) {
 	// 定义变量记录被删除的 DOM 的根节点
-	let rootHostNode: FiberNode | null = null;
+	const rootChildrenToDelete: FiberNode[] = [];
 
 	// 递归子树操作
 	commitNestedComponent(childToDelete, (unmountFiber) => {
 		switch (unmountFiber.tag) {
 			case HostComponent:
-				if (rootHostNode === null) {
-					rootHostNode = unmountFiber;
-				}
+				recordHostChildrenToDelete(rootChildrenToDelete, unmountFiber);
 				// TODO 解绑 ref
 				return;
 
 			case HostText:
-				if (rootHostNode === null) {
-					rootHostNode = unmountFiber;
-				}
+				recordHostChildrenToDelete(rootChildrenToDelete, unmountFiber);
 				return;
 
 			case FunctionComponent:
@@ -118,12 +142,14 @@ function commitDeletion(childToDelete: FiberNode) {
 	});
 
 	// 移除 rootHostComponent 的 DOM
-	if (rootHostNode !== null) {
+	if (rootChildrenToDelete.length) {
 		// 获取需要被删除的 DOM 节点的父节点
-		const hostParent = getHostParent(rootHostNode);
+		const hostParent = getHostParent(childToDelete);
 		if (hostParent !== null) {
 			// 调用 removeChild 函数删除 hostParent 下的 rootHostNode 子节点
-			removeChild((rootHostNode as FiberNode).stateNode, hostParent);
+			rootChildrenToDelete.forEach((node) => {
+				removeChild(node.stateNode, hostParent);
+			});
 		}
 	}
 	// 置空对应的 fiberNode 对应的属性，因为 childToDelete 对应的 DOM 已经被删除了
@@ -161,7 +187,9 @@ function commitNestedComponent(
 			// 向上归的过程
 			node = node.return;
 		}
+		// 完善 node.sibling.return 属性
 		node.sidling.return = node.return;
+		// 循环赋值 node 变量
 		node = node.sidling;
 	}
 }
