@@ -1,10 +1,12 @@
 import { Dispatch } from 'react/src/currentDispatcher';
 import { Action } from 'shared/ReactTypes';
 import { Update } from './fiberFlags';
+import { Lane } from './fiberLanes';
 
 // 定义 Update
 export interface Update<State> {
 	action: Action<State>;
+	lane: Lane;
 	next: Update<any> | null;
 }
 
@@ -17,9 +19,13 @@ export interface UpdateQueue<State> {
 }
 
 // 创建 Update 对象
-export const createUpdate = <State>(action: Action<State>): Update<State> => {
+export const createUpdate = <State>(
+	action: Action<State>,
+	lane: Lane
+): Update<State> => {
 	return {
 		action,
+		lane,
 		next: null
 	};
 };

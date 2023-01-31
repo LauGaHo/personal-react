@@ -2,6 +2,7 @@ import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
 import internals from 'shared/internals';
 import { Action } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
+import { requestUpdateLane } from './fiberLanes';
 import {
 	createUpdate,
 	createUpdateQueue,
@@ -174,12 +175,13 @@ function dispatchSetState<State>(
 	updateQueue: UpdateQueue<State>,
 	action: Action<State>
 ) {
+	const lane = requestUpdateLane();
 	// 创建 update 对象
-	const update = createUpdate(action);
+	const update = createUpdate(action, lane);
 	// 将新创建的 update 对象放到 updateQueue 中
 	enqueueUpdate(updateQueue, update);
 	// 从当前 fiberNode 开始调度更新
-	scheduleUpdateOnFiber(fiber);
+	scheduleUpdateOnFiber(fiber, lane);
 }
 
 // 在 mount 阶段创建 Hook 对象并形成 Hook 链表
