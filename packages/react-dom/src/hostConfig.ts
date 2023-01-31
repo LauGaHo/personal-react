@@ -1,6 +1,6 @@
 import { DOMElement } from './SyntheticEvent';
 import { FiberNode } from 'react-reconciler/src/fiber';
-import { HostComponent, HostText } from 'react-reconciler/src/workTags';
+import { HostText } from 'react-reconciler/src/workTags';
 import { Props } from 'shared/ReactTypes';
 import { updateFiberProps } from './SyntheticEvent';
 
@@ -65,3 +65,11 @@ export function insertChildToContainer(
 ) {
 	container.insertBefore(child, before);
 }
+
+// 根据宿主环境获取支持微任务的形式，用于使用微任务执行调度任务
+export const scheduleMicroTask =
+	typeof queueMicrotask === 'function'
+		? queueMicrotask
+		: typeof Promise === 'function'
+		? (callback: (...args: any) => void) => Promise.resolve(null).then(callback)
+		: setTimeout;
