@@ -26,6 +26,7 @@ export function flushSyncCallbacks() {
 			}
 		} finally {
 			isFlushingSyncQueue = false;
+			// 全部执行完 syncQueue 中的回调函数之后，需要清空 syncQueue 队列
 			syncQueue = null;
 		}
 	}
