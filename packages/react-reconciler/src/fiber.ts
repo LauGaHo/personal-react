@@ -67,7 +67,7 @@ export class FiberRootNode {
 	finishedWork: FiberNode | null;
 	// 未被消费的 Lane 集合
 	pendingLanes: Lanes;
-	// 本次更新消费的 Lane 集合
+	// 本次更新消费的 Lane
 	finishedLane: Lane;
 
 	constructor(container: Container, hostRootFiber: FiberNode) {

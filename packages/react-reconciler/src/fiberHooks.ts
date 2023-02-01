@@ -2,7 +2,7 @@ import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
 import internals from 'shared/internals';
 import { Action } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
-import { requestUpdateLane } from './fiberLanes';
+import { Lane, NoLane, requestUpdateLane } from './fiberLanes';
 import {
 	createUpdate,
 	createUpdateQueue,
@@ -18,6 +18,8 @@ let currentlyRenderingFiber: FiberNode | null = null;
 let workInProgressHook: Hook | null = null;
 // update 阶段时，指代当前 fiberNode 的某个 Hook 实例对象对应在 current 树上的 Hook 实例对象
 let currentHook: Hook | null = null;
+// 当前正在处理的优先级
+let renderLane: Lane = NoLane;
 
 // 从 shared 中引入 internals 文件中的 currentDispatcher
 // currentDispatcher 指代当前应用中指向的 Hook 链表上下文
@@ -31,11 +33,13 @@ interface Hook {
 }
 
 // render 阶段对函数组件中的 Hook 的处理
-export function renderWithHooks(wip: FiberNode) {
+export function renderWithHooks(wip: FiberNode, lane: Lane) {
 	// 执行赋值操作
 	currentlyRenderingFiber = wip;
 	// 重置操作，重置 hooks 链表
 	wip.memoizedState = null;
+	// 将传入函数的 lane 赋值给全局变量 renderLane
+	renderLane = lane;
 
 	const current = wip.alternate;
 
@@ -55,6 +59,7 @@ export function renderWithHooks(wip: FiberNode) {
 	currentlyRenderingFiber = null;
 	workInProgressHook = null;
 	currentHook = null;
+	renderLane = NoLane;
 	return children;
 }
 
@@ -79,7 +84,11 @@ function updateState<State>(): [State, Dispatch<State>] {
 
 	if (pending !== null) {
 		// 计算新值
-		const { memoizedState } = processUpdateQueue(hook.memoizedState, pending);
+		const { memoizedState } = processUpdateQueue(
+			hook.memoizedState,
+			pending,
+			renderLane
+		);
 		// 并赋值到 hook 中的 memoizedState 变量上
 		hook.memoizedState = memoizedState;
 	}

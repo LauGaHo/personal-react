@@ -7,6 +7,7 @@ import { MutationMask, NoFlags } from './fiberFlags';
 import {
 	getHighestPriorityLane,
 	Lane,
+	markRootFinished,
 	mergeLanes,
 	NoLane,
 	SyncLane
@@ -15,9 +16,13 @@ import { flushSyncCallbacks, scheduleSyncCallback } from './syncTaskQueue';
 import { HostRoot } from './workTags';
 
 let workInProgress: FiberNode | null = null;
+// 记录本次更新的 Lane
+let wipRootRenderLane: Lane = NoLane;
 
-function prepareFreshStack(root: FiberRootNode) {
+function prepareFreshStack(root: FiberRootNode, lane: Lane) {
 	workInProgress = createWorkInProgress(root.current, {});
+	// 每次更新前，都记录当前此次更新的优先级
+	wipRootRenderLane = lane;
 }
 
 export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
@@ -83,8 +88,12 @@ function performSyncWorkOnRoot(root: FiberRootNode, lane: Lane) {
 		return;
 	}
 
+	if (__DEV__) {
+		console.warn('render 阶段开始');
+	}
+
 	// 初始化
-	prepareFreshStack(root);
+	prepareFreshStack(root, lane);
 
 	do {
 		try {
@@ -100,6 +109,10 @@ function performSyncWorkOnRoot(root: FiberRootNode, lane: Lane) {
 
 	const finishedWork = root.current.alternate;
 	root.finishedWork = finishedWork;
+	// 记录本次消费的 Lane
+	root.finishedLane = lane;
+	// 更新结束之后，重新将 wipRootRenderLane 赋值为 NoLane
+	wipRootRenderLane = NoLane;
 
 	// 根据 wip fiberNode 树中的 flags 提交给 render
 	commitRoot(root);
@@ -117,8 +130,18 @@ function commitRoot(root: FiberRootNode) {
 		console.warn('commit阶段开始', finishedWork);
 	}
 
+	// 临时变量记录此次更新的优先级 lane
+	const lane = root.finishedLane;
+
+	if (lane === NoLane && __DEV__) {
+		console.error('commit 阶段 finishedLane 不应该是 NoLane');
+	}
+
 	// 重置操作
 	root.finishedWork = null;
+	root.finishedLane = NoLane;
+
+	markRootFinished(root, lane);
 
 	// 判断是否存在 3 个子阶段需要执行的操作
 	// 这里需要判断两项，分别是：root.flags 和 root.subtreeFlags
@@ -147,7 +170,7 @@ function workLoop() {
 }
 
 function performUnitOfWork(fiber: FiberNode) {
-	const next = beginWork(fiber);
+	const next = beginWork(fiber, wipRootRenderLane);
 	fiber.memoizedProps = fiber.pendingProps;
 
 	if (next === null) {

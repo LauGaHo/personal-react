@@ -45,8 +45,6 @@ export const enqueueUpdate = <State>(
 	updateQueue: UpdateQueue<State>,
 	update: Update<State>
 ) => {
-	updateQueue.shared.pending = update;
-
 	const pending = updateQueue.shared.pending;
 	if (pending === null) {
 		// 如果当前 pending 为空，说明当前的 updateQueue 为空，所以将传进来的 update 对象的 next 指针指向它自己
@@ -66,22 +64,41 @@ export const enqueueUpdate = <State>(
 // 实现 baseState 和 Update 对象进行比对，得出最新的 memoizedState
 export const processUpdateQueue = <State>(
 	baseState: State,
-	pendingUpdate: Update<State> | null
+	pendingUpdate: Update<State> | null,
+	renderLane: Lane
 ): { memoizedState: State } => {
 	const result: ReturnType<typeof processUpdateQueue<State>> = {
 		memoizedState: baseState
 	};
 
 	if (pendingUpdate !== null) {
-		const action = pendingUpdate.action;
-		if (action instanceof Function) {
-			// baseState = 1; update = (x) => 4x; => memoizedState = 4
-			result.memoizedState = action(baseState);
-		} else {
-			// baseState = 1; update = 2; => memoizedState = 2
-			result.memoizedState = action;
-		}
+		// 获取到 updateQueue.shared.pending 中的 Update 链表中第一个插入的 Update 对象
+		const first = pendingUpdate.next;
+		// do~while 循环中使用的变量
+		let pending = pendingUpdate.next as Update<any>;
+		do {
+			// 获取当前 Update 对象对应的优先级 lane
+			const updateLane = pending.lane;
+			// 当前 Update 对象对应的优先级 lane 全等于当前任务的优先级，则执行
+			if (updateLane === renderLane) {
+				const action = pending.action;
+				if (action instanceof Function) {
+					// baseState = 1; update = (x) => 4x; => memoizedState = 4
+					baseState = action(baseState);
+				} else {
+					// baseState = 1; update = 2; => memoizedState = 2
+					baseState = action;
+				}
+			} else {
+				if (__DEV__) {
+					console.error('不应该进入 updateLane !== renderLane 这个逻辑');
+				}
+			}
+			// 循环赋值变量 pending
+			pending = pending.next as Update<any>;
+		} while (pending !== first);
 	}
-
+	// 将最终的 baseState 赋值给 result.memoizedState
+	result.memoizedState = baseState;
 	return result;
 };

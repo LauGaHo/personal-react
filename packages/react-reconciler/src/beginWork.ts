@@ -4,6 +4,7 @@ import { ReactElementType } from 'shared/ReactTypes';
 import { mountChildFibers, reconcileChildFibers } from './childFibers';
 import { FiberNode } from './fiber';
 import { renderWithHooks } from './fiberHooks';
+import { Lane } from './fiberLanes';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
 import {
 	Fragment,
@@ -13,11 +14,11 @@ import {
 	HostText
 } from './workTags';
 
-export const beginWork = (wip: FiberNode) => {
+export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	// 比较，并返回子 fiberNode
 	switch (wip.tag) {
 		case HostRoot:
-			return updateHostRoot(wip);
+			return updateHostRoot(wip, renderLane);
 
 		case HostComponent:
 			return updateHostComponent(wip);
@@ -26,7 +27,7 @@ export const beginWork = (wip: FiberNode) => {
 			return null;
 
 		case FunctionComponent:
-			return updateFunctionComponent(wip);
+			return updateFunctionComponent(wip, renderLane);
 
 		case Fragment:
 			return updateFragment(wip);
@@ -46,14 +47,14 @@ function updateFragment(wip: FiberNode) {
 	return wip.child;
 }
 
-function updateFunctionComponent(wip: FiberNode) {
-	const nextChildren = renderWithHooks(wip);
+function updateFunctionComponent(wip: FiberNode, renderLane: Lane) {
+	const nextChildren = renderWithHooks(wip, renderLane);
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
 }
 
 // 针对 HostRootFiber 的 mount 逻辑
-function updateHostRoot(wip: FiberNode) {
+function updateHostRoot(wip: FiberNode, renderLane: Lane) {
 	// 获取 wip 原本的 state
 	const baseState = wip.memoizedState;
 	// 获取 wip 当前的 updateQueue (里边装着最新的 Update 实例对象)
@@ -64,7 +65,7 @@ function updateHostRoot(wip: FiberNode) {
 	updateQueue.shared.pending = null;
 	// 将原本的 state 和当前最新的 Update 对象进行比较，得到的结果是 ReactElementType 类型对象
 	// 这里的 memoizedState 相当于 <App/> 的 ReactElementType 对象
-	const { memoizedState } = processUpdateQueue(baseState, pending);
+	const { memoizedState } = processUpdateQueue(baseState, pending, renderLane);
 	// 将最新的 memoizedState 赋值给 wip 的 memoizedState 属性中
 	wip.memoizedState = memoizedState;
 
