@@ -81,6 +81,8 @@ function updateState<State>(): [State, Dispatch<State>] {
 	// 计算当前 useState 的 Hook 的最新值并赋值到 memoizedState 变量中
 	const queue = hook.updateQueue as UpdateQueue<State>;
 	const pending = queue.shared.pending;
+	// 代表 updateQueue 中的 shared.pending 中的 update 都被消费掉了
+	queue.shared.pending = null;
 
 	if (pending !== null) {
 		// 计算新值
