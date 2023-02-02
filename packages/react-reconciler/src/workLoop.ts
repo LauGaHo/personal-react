@@ -202,6 +202,7 @@ function commitRoot(root: FiberRootNode) {
 	}
 
 	rootDoesHasPassiveEffects = false;
+	// 确保 root 节点上任何一个其他额外的任务都能被调度
 	ensureRootIsScheduled(root);
 }
 
