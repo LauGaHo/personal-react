@@ -8,6 +8,7 @@ import {
 import { Flags, NoFlags } from './fiberFlags';
 import { Container } from 'hostConfig';
 import { Lane, Lanes, NoLane, NoLanes } from './fiberLanes';
+import { Effect } from './fiberHooks';
 
 export class FiberNode {
 	type: any;
@@ -23,10 +24,12 @@ export class FiberNode {
 	index: number;
 
 	memoizedProps: Props | null;
+	// 对于 FunctionComponent 来说，存放着 Hook 链表
 	memoizedState: any;
 	alternate: FiberNode | null;
 	flags: Flags;
 	subtreeFlags: Flags;
+	// 对于 FunctionComponent 来说，存放着 FCUpdateQueue，FCUpdateQueue 中存放着 Effect 环状链表
 	updateQueue: unknown;
 	// 存放需要被删除的 FiberNode 子节点
 	deletions: FiberNode[] | null;
@@ -61,6 +64,11 @@ export class FiberNode {
 	}
 }
 
+export interface PendingPassiveEffects {
+	unmount: Effect[];
+	update: Effect[];
+}
+
 export class FiberRootNode {
 	container: Container;
 	current: FiberNode;
@@ -69,6 +77,7 @@ export class FiberRootNode {
 	pendingLanes: Lanes;
 	// 本次更新消费的 Lane
 	finishedLane: Lane;
+	pendingPassiveEffects: PendingPassiveEffects;
 
 	constructor(container: Container, hostRootFiber: FiberNode) {
 		this.container = container;
@@ -77,6 +86,11 @@ export class FiberRootNode {
 		this.finishedWork = null;
 		this.pendingLanes = NoLanes;
 		this.finishedLane = NoLane;
+
+		this.pendingPassiveEffects = {
+			unmount: [],
+			update: []
+		};
 	}
 }
 

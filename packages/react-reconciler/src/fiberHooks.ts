@@ -2,7 +2,9 @@ import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
 import internals from 'shared/internals';
 import { Action } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
+import { Flags, PassiveEffect } from './fiberFlags';
 import { Lane, NoLane, requestUpdateLane } from './fiberLanes';
+import { HookHasEffect, Passive } from './hookEffectTags';
 import {
 	createUpdate,
 	createUpdateQueue,
@@ -32,12 +34,37 @@ interface Hook {
 	next: Hook | null;
 }
 
+export interface Effect {
+	// 用于区分 useEffect, useInsertionEffect, useLayoutEffect
+	tag: Flags;
+	// useEffect 传入回调函数
+	create: EffectCallback | void;
+	// useEffect 传入回调函数所返回的函数
+	destroy: EffectCallback | void;
+	// 当前 useEffect 所需要的依赖
+	deps: EffectDeps;
+	// 指向下一个 Effect 实例对象
+	next: Effect | null;
+}
+
+// 声明 FCUpdateQueue 类型
+export interface FCUpdateQueue<State> extends UpdateQueue<State> {
+	lastEffect: Effect | null;
+}
+
+// 声明 useEffect 回调函数的类型 EffectCallback
+type EffectCallback = () => void;
+// 声明 useEffect 所需的依赖的类型 EffectDeps
+type EffectDeps = any[] | null;
+
 // render 阶段对函数组件中的 Hook 的处理
 export function renderWithHooks(wip: FiberNode, lane: Lane) {
 	// 执行赋值操作
 	currentlyRenderingFiber = wip;
 	// 重置操作，重置 hooks 链表
 	wip.memoizedState = null;
+	// 重置 effect 链表
+	wip.updateQueue = null;
 	// 将传入函数的 lane 赋值给全局变量 renderLane
 	renderLane = lane;
 
@@ -65,13 +92,145 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 
 // mount 阶段对应的 HookDispatcher
 const HooksDispatcherOnMount: Dispatcher = {
-	useState: mountState
+	useState: mountState,
+	useEffect: mountEffect
 };
 
 // update 阶段对应的 HookDispatcher
 const HookDispatcherOnUpdate: Dispatcher = {
-	useState: updateState
+	useState: updateState,
+	useEffect: updateEffect
 };
+
+// mount 阶段下 useEffect 对应的 Dispatch
+function mountEffect(create: EffectCallback | void, deps: EffectDeps | void) {
+	// 创建一个 Hook 实例对象
+	const hook = mountWorkInProgressHook();
+	// 获取传入的 deps 依赖
+	const nextDeps = deps === undefined ? null : deps;
+	// 为当前 FiberNode 的 flags 属性赋值为 PassiveEffect，标记着当前 fiberNode 本次更新存在副作用
+	(currentlyRenderingFiber as FiberNode).flags |= PassiveEffect;
+
+	// 根据已有的信息构建一个 Effect 实例对象，并和已有的 Effect 实例对象形成环形链表
+	hook.memoizedState = pushEffect(
+		Passive | HookHasEffect,
+		create,
+		undefined,
+		nextDeps
+	);
+}
+
+// update 阶段下 useEffect 对应的 Dispatch
+function updateEffect(create: EffectCallback | void, deps: EffectDeps | void) {
+	// 获取可复用的 Hook 实例对象
+	const hook = updateWorkInProgressHook();
+	// 规范化 deps 参数
+	const nextDeps = deps === undefined ? null : deps;
+	// 声明变量 destroy 的类型
+	let destroy: EffectCallback | void;
+
+	if (currentHook !== null) {
+		// 获取 current 树上和本 Effect 与之对应的 Effect 实例对象
+		const prevEffect = currentHook.memoizedState as Effect;
+		// 获取 current 树上 Effect 实例对象的 destroy 属性
+		destroy = prevEffect.destroy;
+
+		if (nextDeps !== null) {
+			// 浅比较依赖
+			// 获取 current 树上 Effect 实例对象中的 deps 属性
+			const prevDeps = prevEffect.deps;
+			// 浅比较，相等
+			if (areHookInputsEqual(nextDeps, prevDeps)) {
+				hook.memoizedState = pushEffect(Passive, create, destroy, nextDeps);
+				return;
+			}
+		}
+		// 浅比较，不相等
+		(currentlyRenderingFiber as FiberNode).flags |= PassiveEffect;
+		// 浅比较依赖是否相等的一个最大的作用就是，依赖相等则 tag 只有 Passive；依赖不等则 tag 是 Passive | HookHasEffect
+		hook.memoizedState = pushEffect(
+			Passive | HookHasEffect,
+			create,
+			destroy,
+			nextDeps
+		);
+	}
+}
+
+// 比较 useEffect 这个 Hook 的依赖是否相等，通过浅比较
+function areHookInputsEqual(nextDeps: EffectDeps, prevDeps: EffectDeps) {
+	if (prevDeps === null || nextDeps === null) {
+		return false;
+	}
+
+	// 通过遍历，比较 prevDeps 和 nextDeps 中的元素是否全等
+	for (let i = 0; i < prevDeps.length && i < nextDeps.length; i++) {
+		if (Object.is(prevDeps[i], nextDeps[i])) {
+			continue;
+		}
+		return false;
+	}
+	return true;
+}
+
+// 构建一个 Effect 实例对象，并跟已有的 Effect 对象形成一条闭环的链表(Effect 环形链表存放在 FiberNode.updateQueue 中)，并最终返回最新的 Effect 实例对象
+function pushEffect(
+	hookFlag: Flags,
+	create: EffectCallback | void,
+	destroy: EffectCallback | void,
+	deps: EffectDeps
+): Effect {
+	// 构建一个 Effect 实例对象
+	const effect: Effect = {
+		tag: hookFlag,
+		create,
+		destroy,
+		deps,
+		next: null
+	};
+	// 获取当前正在处理的 fiber 对象
+	const fiber = currentlyRenderingFiber as FiberNode;
+	// 获取 fiber 对象中的 updateQueue 属性
+	const updateQueue = fiber.updateQueue as FCUpdateQueue<any>;
+	// updateQueue 为空
+	if (updateQueue === null) {
+		// 创建一个 FCUpdateQueue 并赋值为 updateQueue 变量
+		const updateQueue = createFCUpdateQueue();
+		// 将名为 updateQueue 的 FCUpdateQueue 对象赋值为 fiber.updateQueue
+		fiber.updateQueue = updateQueue;
+		// 将单一的一个 Effect 行成一条闭环的链表
+		effect.next = effect;
+		// 将 FCUpdateQueue 的 lastEffect 指向 Effect 实例对象
+		updateQueue.lastEffect = effect;
+	} else {
+		// 插入 effect
+		const lastEffect = updateQueue.lastEffect;
+		if (lastEffect === null) {
+			// 一般不会出现这种情况，因为上边已经处理了，这里只是以防万一
+			effect.next = effect;
+			updateQueue.lastEffect = effect;
+		} else {
+			// 获取 effect 链表中第一个 effect
+			const firstEffect = lastEffect.next;
+			// 将次新的 effect 的 next 指针指向最新的 effect 实例对象
+			lastEffect.next = effect;
+			// 将最新的 effect 的 next 指针指向第一个 effect 实例对象
+			effect.next = firstEffect;
+			// 将 updateQueue 的 lastEffect 指向最新的 effect
+			updateQueue.lastEffect = effect;
+		}
+	}
+	return effect;
+}
+
+// 创建一个 FCUpdateQueue 实例对象
+function createFCUpdateQueue<State>() {
+	// 通过 createUpdateQueue 创建一个队列，并将创建出来的对象作为 FCUpdateQueue 来看待
+	const updateQueue = createUpdateQueue<State>() as FCUpdateQueue<State>;
+	// 为 updateQueue.lastEffect 属性赋值
+	updateQueue.lastEffect = null;
+	return updateQueue;
+}
 
 // update 阶段 useState 对应的 Dispatch
 function updateState<State>(): [State, Dispatch<State>] {
@@ -197,6 +356,7 @@ function dispatchSetState<State>(
 
 // 在 mount 阶段创建 Hook 对象并形成 Hook 链表
 function mountWorkInProgressHook(): Hook {
+	// 构建一个 hook 实例对象
 	const hook: Hook = {
 		memoizedState: null,
 		updateQueue: null,
@@ -207,7 +367,10 @@ function mountWorkInProgressHook(): Hook {
 		if (currentlyRenderingFiber === null) {
 			throw new Error('请在函数组件内调用 hook');
 		} else {
+			// 将新建的 hook 赋值给变量 workInProgressHook 变量
 			workInProgressHook = hook;
+			// 将新建的 hook 实例对象赋值给 currentlyRenderingFiber.memoizedState
+			// 由此可以，FunctionComponent 类型组件的 FiberNode 中的 memoizedState 属性存放着该 FunctionComponent 的第一个 hook 实例对象
 			currentlyRenderingFiber.memoizedState = workInProgressHook;
 		}
 	} else {

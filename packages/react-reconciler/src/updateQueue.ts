@@ -1,6 +1,5 @@
 import { Dispatch } from 'react/src/currentDispatcher';
 import { Action } from 'shared/ReactTypes';
-import { Update } from './fiberFlags';
 import { Lane } from './fiberLanes';
 
 // 定义 Update
