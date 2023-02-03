@@ -26,6 +26,7 @@ importers:
       jest: ^29.3.1
       jest-config: ^29.3.1
       jest-environment-jsdom: ^29.3.1
+      jest-react: ^0.14.0
       prettier: ^2.8.1
       rimraf: ^3.0.2
       rollup: ^3.9.1
@@ -59,6 +60,7 @@ importers:
       jest: 29.3.1
       jest-config: 29.3.1
       jest-environment-jsdom: 29.3.1
+      jest-react: 0.14.0_jest@29.3.1
       prettier: 2.8.1
       rimraf: 3.0.2
       rollup: 3.9.1
@@ -4100,6 +4102,16 @@ packages:
         optional: true
     dependencies:
       jest-resolve: 29.3.1
+    dev: true
+
+  /jest-react/0.14.0_jest@29.3.1:
+    resolution: {integrity: sha512-edKkKBvG4iVbEm6ogCiu9uTUCLNpj2V4dpM0dcrxBz7OTd2lvng2ELkLqji1tdq2BtEXkfhDbqgecNFn4W+KDQ==}
+    peerDependencies:
+      jest: ^23.0.1 || ^24.0.0 || ^25.1.0
+      react: ^18.2.0
+      react-test-renderer: ^18.2.0
+    dependencies:
+      jest: 29.3.1
     dev: true
 
   /jest-regex-util/29.2.0:
