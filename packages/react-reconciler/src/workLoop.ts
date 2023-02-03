@@ -34,7 +34,7 @@ let workInProgress: FiberNode | null = null;
 // 记录本次更新的 Lane
 let wipRootRenderLane: Lane = NoLane;
 // 标记当前 fiberRootNode 在本次更新中是否含有 PassiveEffect
-let rootDoesHasPassiveEffects: Boolean = false;
+let rootDoesHasPassiveEffects = false;
 
 function prepareFreshStack(root: FiberRootNode, lane: Lane) {
 	workInProgress = createWorkInProgress(root.current, {});
