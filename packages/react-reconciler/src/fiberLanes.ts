@@ -36,6 +36,11 @@ export function getHighestPriorityLane(lanes: Lanes): Lane {
 	return lanes & -lanes;
 }
 
+// 判断某一个优先级是否是另一个优先级集合的子集
+export function isSubsetOfLanes(set: Lanes, subset: Lane) {
+	return (set & subset) === subset;
+}
+
 // 从 FiberRootNode.pendingLanes 中移除给定的 lane
 export function markRootFinished(root: FiberRootNode, lane: Lane) {
 	root.pendingLanes &= ~lane;

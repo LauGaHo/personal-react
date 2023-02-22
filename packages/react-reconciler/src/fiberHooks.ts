@@ -10,6 +10,7 @@ import {
 	createUpdateQueue,
 	enqueueUpdate,
 	processUpdateQueue,
+	Update,
 	UpdateQueue
 } from './updateQueue';
 import { scheduleUpdateOnFiber } from './workLoop';
@@ -29,9 +30,14 @@ const { currentDispatcher } = internals;
 
 // 定义 Hook 实例对象
 interface Hook {
+	// 上次更新计算的最终 state
 	memoizedState: any;
 	updateQueue: unknown;
 	next: Hook | null;
+	// 本次更新参与计算的初始值 state
+	baseState: any;
+	// 下次更新时需要处理的 update 链表
+	baseQueue: Update<any> | null;
 }
 
 export interface Effect {
@@ -239,19 +245,51 @@ function updateState<State>(): [State, Dispatch<State>] {
 
 	// 计算当前 useState 的 Hook 的最新值并赋值到 memoizedState 变量中
 	const queue = hook.updateQueue as UpdateQueue<State>;
+	// 获取当前 hook 实例对象中的 baseState
+	const baseState = hook.baseState;
+
+	// 获取当前 hook 中的 pendingUpdate 链表
 	const pending = queue.shared.pending;
-	// 代表 updateQueue 中的 shared.pending 中的 update 都被消费掉了
-	queue.shared.pending = null;
+	// 将 currentHook 赋值为 current，这里的 current 指代的是 current 树上对应的 hook 实例对象
+	const current = currentHook as Hook;
+	// 在 current 树上对应的 hook 实例对象上拿到 baseQueue 属性
+	let baseQueue = current.baseQueue;
 
 	if (pending !== null) {
-		// 计算新值
-		const { memoizedState } = processUpdateQueue(
-			hook.memoizedState,
-			pending,
-			renderLane
-		);
-		// 并赋值到 hook 中的 memoizedState 变量上
-		hook.memoizedState = memoizedState;
+		// pendingUpdate 和 baseQueue 合并的解雇需要保存在 current 树中，防止更新被中断，下次更新再次从 current 中寻找对应的 update 实例对象
+		if (baseQueue !== null) {
+			// 将 pendingUpdate 和 baseQueue 进行合并操作
+			// baseQueue -> b2 -> b0 -> b1 -> b2
+			// pending -> p2 -> p0 -> p1 -> p2
+			// baseFirst = b0
+			const baseFirst = baseQueue.next;
+			// pendingFirst = p0
+			const pendingFirst = pending.next;
+			// b2 -> p0
+			baseQueue.next = pendingFirst;
+			// p2 -> b0
+			pending.next = baseFirst;
+			// p2 -> b0 -> b1 -> b2 -> p0 -> p1 -> p2
+		}
+		// 此时的 pending 就是合并完成的结果
+		baseQueue = pending;
+		// 将 baseQueue 保存在 current 中
+		current.baseQueue = pending;
+		// 此时可以将 queue 中的 update 链表置空，因为已经存放在 current 中了
+		queue.shared.pending = null;
+
+		if (baseQueue !== null) {
+			// 计算新值
+			const {
+				memoizedState,
+				baseQueue: newBaseQueue,
+				baseState: newBaseState
+			} = processUpdateQueue(baseState, baseQueue, renderLane);
+			// 并将返回的 memoizedState, baseState, baseQueue 赋值到 hook 对应的变量中
+			hook.memoizedState = memoizedState;
+			hook.baseState = newBaseState;
+			hook.baseQueue = newBaseQueue;
+		}
 	}
 
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
@@ -293,7 +331,9 @@ function updateWorkInProgressHook(): Hook {
 	const newHook: Hook = {
 		memoizedState: currentHook.memoizedState,
 		updateQueue: currentHook.updateQueue,
-		next: null
+		next: null,
+		baseQueue: currentHook.baseQueue,
+		baseState: currentHook.baseState
 	};
 	if (workInProgressHook === null) {
 		// update 时，第一个 hook
@@ -360,7 +400,9 @@ function mountWorkInProgressHook(): Hook {
 	const hook: Hook = {
 		memoizedState: null,
 		updateQueue: null,
-		next: null
+		next: null,
+		baseQueue: null,
+		baseState: null
 	};
 	if (workInProgressHook === null) {
 		// mount 时，第一个 hook
