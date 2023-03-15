@@ -419,11 +419,15 @@ function completeUnitOfWork(fiber: FiberNode) {
 		completeWork(node);
 		const sibling = node.sidling;
 
+		// 当前 sibling 对应的 fiber 节点不为空，说明 fiber 形参的旁边仍有 fiber 节点
 		if (sibling !== null) {
+			// 将全局变量 workInProgress 赋值为 sibling，用于进入下一个 beginWork 循环构造
 			workInProgress = sibling;
 			return;
 		}
+		// 反之则一层一层往上赋值，对其父节点及其祖先节点都进行 completeWork 函数的调用操作
 		node = node.return;
+		// 更新全局变量 workInProgress
 		workInProgress = node;
 	} while (node !== null);
 }
