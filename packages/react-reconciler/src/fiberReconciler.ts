@@ -1,4 +1,8 @@
 import { Container } from 'hostConfig';
+import {
+	unstable_ImmediatePriority,
+	unstable_runWithPriority
+} from 'scheduler';
 import { ReactElementType } from 'shared/ReactTypes';
 import { FiberNode, FiberRootNode } from './fiber';
 import { requestUpdateLane } from './fiberLanes';
@@ -24,13 +28,17 @@ export function updateContainer(
 	element: ReactElementType | null,
 	root: FiberRootNode
 ) {
-	const hostRootFiber = root.current;
-	const lane = requestUpdateLane();
-	const update = createUpdate<ReactElementType | null>(element, lane);
-	enqueueUpdate(
-		hostRootFiber.updateQueue as UpdateQueue<ReactElementType | null>,
-		update
-	);
-	scheduleUpdateOnFiber(hostRootFiber, lane);
+	// 将回调丢进 Scheduler 中进行执行，并且是按照同步更新逻辑来执行
+	unstable_runWithPriority(unstable_ImmediatePriority, () => {
+		const hostRootFiber = root.current;
+		// 由于回调使用了同步优先级，所以这里请求的 lane 同样也是同步优先级，因为这里是获取调度器当前任务的优先级的
+		const lane = requestUpdateLane();
+		const update = createUpdate<ReactElementType | null>(element, lane);
+		enqueueUpdate(
+			hostRootFiber.updateQueue as UpdateQueue<ReactElementType | null>,
+			update
+		);
+		scheduleUpdateOnFiber(hostRootFiber, lane);
+	});
 	return element;
 }
