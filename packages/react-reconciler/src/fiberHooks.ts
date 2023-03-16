@@ -1,4 +1,5 @@
 import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
+import currentBatchConfig from 'react/src/currentBatchConfig';
 import internals from 'shared/internals';
 import { Action } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
@@ -99,14 +100,43 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 // mount 阶段对应的 HookDispatcher
 const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState,
-	useEffect: mountEffect
+	useEffect: mountEffect,
+	useTransition: mountTransition
 };
 
 // update 阶段对应的 HookDispatcher
 const HookDispatcherOnUpdate: Dispatcher = {
 	useState: updateState,
-	useEffect: updateEffect
+	useEffect: updateEffect,
+	useTransition: updateTransition
 };
+
+// mount 阶段 useTransition 钩子实现
+function mountTransition(): [boolean, (callback: () => void) => void] {
+	// 创建一个 state 并且命名为 isPending 变量
+	const [isPending, setPending] = mountState(false);
+	// 为 useTransition 创建了一个 hook 实例对象并形成一个 hook 链表
+	const hook = mountWorkInProgressHook();
+	// 将 startTransition 绑定内置的 useState 对应的 dispatch 方法
+	const start = startTransition.bind(null, setPending);
+	hook.memoizedState = start;
+	return [isPending, start];
+}
+
+// useTransition 返回的方法
+function startTransition(setPending: Dispatch<boolean>, callback: () => void) {
+	// 先触发一次高优先级的同步更新
+	setPending(true);
+	// 先获取之前的 transition 对应的值
+	const prevTransition = currentBatchConfig.transition;
+	// 再将对应的 transition 修改，1 标志为进入了 transition
+	currentBatchConfig.transition = 1;
+
+	callback();
+	setPending(false);
+
+	currentBatchConfig.transition = prevTransition;
+}
 
 // mount 阶段下 useEffect 对应的 Dispatch
 function mountEffect(create: EffectCallback | void, deps: EffectDeps | void) {
@@ -124,6 +154,17 @@ function mountEffect(create: EffectCallback | void, deps: EffectDeps | void) {
 		undefined,
 		nextDeps
 	);
+}
+
+// update 阶段下的 useTransition 实现
+function updateTransition(): [boolean, (callback: () => void) => void] {
+	// 由于 useTransition 中内嵌了一个 useState，所以在 updateTransition 中先获取对应的 useState 的 hook，再获取 useTransition 对应的 hook
+	const [isPending] = updateState();
+	// 获取 useTransition 对应的 hook 实例对象
+	const hook = updateWorkInProgressHook();
+	// 获取 useTransition 钩子中对应的 startTransition 方法
+	const start = hook.memoizedState;
+	return [isPending as boolean, start];
 }
 
 // update 阶段下 useEffect 对应的 Dispatch
@@ -277,19 +318,20 @@ function updateState<State>(): [State, Dispatch<State>] {
 		current.baseQueue = pending;
 		// 此时可以将 queue 中的 update 链表置空，因为已经存放在 current 中了
 		queue.shared.pending = null;
+	}
 
-		if (baseQueue !== null) {
-			// 计算新值
-			const {
-				memoizedState,
-				baseQueue: newBaseQueue,
-				baseState: newBaseState
-			} = processUpdateQueue(baseState, baseQueue, renderLane);
-			// 并将返回的 memoizedState, baseState, baseQueue 赋值到 hook 对应的变量中
-			hook.memoizedState = memoizedState;
-			hook.baseState = newBaseState;
-			hook.baseQueue = newBaseQueue;
-		}
+	// 为了避免 pending 属性为空的时候，无法正确计算 state 的值，所以需要将计算 state 值的代码移出 if (pending !== null) 条件判断
+	if (baseQueue !== null) {
+		// 计算新值
+		const {
+			memoizedState,
+			baseQueue: newBaseQueue,
+			baseState: newBaseState
+		} = processUpdateQueue(baseState, baseQueue, renderLane);
+		// 并将返回的 memoizedState, baseState, baseQueue 赋值到 hook 对应的变量中
+		hook.memoizedState = memoizedState;
+		hook.baseState = newBaseState;
+		hook.baseQueue = newBaseQueue;
 	}
 
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
@@ -370,6 +412,8 @@ function mountState<State>(
 	hook.updateQueue = queue;
 	// 更新当前 Hook 实例对象的最新值，也就是 memoizedState 属性
 	hook.memoizedState = memoizedState;
+	// 为了避免 baseState 为 null 值，所以将 memoizedState 也赋值到 baseState 中
+	hook.baseState = memoizedState;
 
 	// 构建对应的 dispatch 方法，并将其复制给 Hook 实例对象中的 dispatch 属性上
 	// @ts-ignore

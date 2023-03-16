@@ -1,3 +1,4 @@
+import ReactCurrentBatchConfig from 'react/src/currentBatchConfig';
 import {
 	unstable_getCurrentPriorityLevel,
 	unstable_IdlePriority,
@@ -10,13 +11,14 @@ import { FiberRootNode } from './fiber';
 export type Lane = number;
 export type Lanes = number;
 
-export const SyncLane = 0b0001;
-export const NoLane = 0b0000;
-export const NoLanes = 0b0000;
+export const SyncLane = 0b00001;
+export const NoLane = 0b00000;
+export const NoLanes = 0b00000;
 // 指代连续输入事件，如：拖拽操作
-export const InputContinuousLane = 0b0010;
-export const DefaultLane = 0b0100;
-export const IdleLane = 0b1000;
+export const InputContinuousLane = 0b00010;
+export const DefaultLane = 0b00100;
+export const TransitionLane = 0b01000;
+export const IdleLane = 0b10000;
 
 // 给定两个优先级 Lane，将这两个 Lane 合并成一个 Lanes
 export function mergeLanes(laneA: Lane, laneB: Lane): Lanes {
@@ -25,6 +27,13 @@ export function mergeLanes(laneA: Lane, laneB: Lane): Lanes {
 
 // 根据任务类型，请求返回一个优先级
 export function requestUpdateLane() {
+	// 判断是否处于 Transition 状态中
+	const isTransition = ReactCurrentBatchConfig.transition !== null;
+	// 处于 Transition 状态直接返回 TransitionLane
+	if (isTransition) {
+		return TransitionLane;
+	}
+
 	// 从当前上下文获取当前调度器正在执行任务的优先级
 	const currentSchedulerPriority = unstable_getCurrentPriorityLevel();
 	const lane = schedulerPriorityToLane(currentSchedulerPriority);

@@ -101,11 +101,15 @@ function ensureRootIsScheduled(root: FiberRootNode) {
 	// 声明 newCallbackNode 变量，用于承接调度器所产生的调度结果
 	let newCallbackNode = null;
 
+	if (__DEV__) {
+		console.log(
+			`在${updateLane === SyncLane ? '微' : '宏'}任务中调度，优先级：`,
+			updateLane
+		);
+	}
+
 	if (updateLane === SyncLane) {
 		// 同步优先级，用微任务调度
-		if (__DEV__) {
-			console.log('在微任务中调度，优先级：', updateLane);
-		}
 		// 调度任务阶段
 		// [performSyncWorkOnRoot, performSyncWorkOnRoot, performSyncWorkOnRoot]
 		scheduleSyncCallback(performSyncWorkOnRoot.bind(null, root, updateLane));
