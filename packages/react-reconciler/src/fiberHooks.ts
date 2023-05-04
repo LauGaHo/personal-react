@@ -101,15 +101,37 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState,
 	useEffect: mountEffect,
-	useTransition: mountTransition
+	useTransition: mountTransition,
+	useRef: mountRef
 };
 
 // update 阶段对应的 HookDispatcher
 const HookDispatcherOnUpdate: Dispatcher = {
 	useState: updateState,
 	useEffect: updateEffect,
-	useTransition: updateTransition
+	useTransition: updateTransition,
+	useRef: updateRef
 };
+
+// mount 阶段 useRef 钩子实现
+function mountRef<T>(initialValue: T): { current: T } {
+	// 创建一个 useRef 对应的 Hook 实例对象
+	const hook = mountWorkInProgressHook();
+	// 创建一个对象，其中 current 属性指向传入的 initialValue
+	const ref = { current: initialValue };
+	// 将 ref 赋值给 Hook 实例对象的 memoizedState 属性
+	hook.memoizedState = ref;
+	// 返回 ref 对象
+	return ref;
+}
+
+// update 阶段 useRef 钩子实现
+function updateRef<T>(initialValue: T): { current: T } {
+	// 获取当前正在处理的 Hook 实例对象
+	const hook = updateWorkInProgressHook();
+	// 返回 Hook 实例对象的 memoizedState 属性
+	return hook.memoizedState;
+}
 
 // mount 阶段 useTransition 钩子实现
 function mountTransition(): [boolean, (callback: () => void) => void] {

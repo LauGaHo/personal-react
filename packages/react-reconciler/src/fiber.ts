@@ -103,6 +103,7 @@ export class FiberRootNode {
 	}
 }
 
+// 根据 current 创建 workInProgress
 export const createWorkInProgress = (
 	current: FiberNode,
 	pendingProps: Props
@@ -128,12 +129,14 @@ export const createWorkInProgress = (
 	wip.child = current.child;
 	wip.memoizedProps = current.memoizedProps;
 	wip.memoizedState = current.memoizedState;
+	wip.ref = current.ref;
 
 	return wip;
 };
 
+// 根据 ReactElement 创建 FiberNode
 export function createFiberFromElement(element: ReactElementType): FiberNode {
-	const { type, key, props } = element;
+	const { type, key, props, ref } = element;
 	// 默认赋值为 FunctionComponent 类型
 	let fiberTag: WorkTag = FunctionComponent;
 
@@ -146,6 +149,8 @@ export function createFiberFromElement(element: ReactElementType): FiberNode {
 
 	const fiber = new FiberNode(fiberTag, props, key);
 	fiber.type = type;
+	fiber.ref = ref;
+
 	return fiber;
 }
 

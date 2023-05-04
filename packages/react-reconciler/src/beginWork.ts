@@ -13,6 +13,7 @@ import {
 	HostRoot,
 	HostText
 } from './workTags';
+import { Ref } from './fiberFlags';
 
 export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	// 比较，并返回子 fiberNode
@@ -81,6 +82,8 @@ function updateHostComponent(wip: FiberNode) {
 	// 获取 HostComponent 节点的 children 属性
 	const nextProps = wip.pendingProps;
 	const nextChildren = nextProps.children;
+	// 标记 Ref
+	markRef(wip.alternate, wip);
 	// 传值给 reconcileChildren 用于生成子节点的 fiberNode
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
@@ -95,5 +98,20 @@ function reconcileChildren(wip: FiberNode, children?: ReactElementType) {
 	} else {
 		// mount
 		wip.child = mountChildFibers(wip, null, children);
+	}
+}
+
+// 标记 Ref
+function markRef(current: FiberNode | null, workInProgress: FiberNode) {
+	// 获取当前的 ref
+	const ref = workInProgress.ref;
+
+	if (
+		// mount 阶段，ref 不为空需要标记 Ref
+		(current === null && ref !== null) ||
+		// update 阶段，ref 不为空且 ref 和 current 中的 ref 不相等需要标记 Ref
+		(current !== null && current.ref !== ref)
+	) {
+		workInProgress.flags |= Ref;
 	}
 }
