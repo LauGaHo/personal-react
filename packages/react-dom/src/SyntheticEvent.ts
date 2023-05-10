@@ -31,12 +31,20 @@ export interface DOMElement extends Element {
 	[elementPropsKey]: Props;
 }
 
-// 将用户绑定的自定义事件回调存放在 DOM[elementPropsKey] 中
+/**
+ * 将用户绑定的自定义事件回调存放在 DOM[elementPropsKey] 中
+ * @param node {DOMElement} DOM 节点实例对象
+ * @param props {Props} 用户绑定的自定义事件回调
+ */
 export function updateFiberProps(node: DOMElement, props: Props) {
 	node[elementPropsKey] = props;
 }
 
-// 初始化事件
+/**
+ * 初始化事件
+ * @param container {Container} 事件绑定的根节点
+ * @param eventType {string} 事件类型
+ */
 export function initEvent(container: Container, eventType: string) {
 	if (!validEventTypeList.includes(eventType)) {
 		console.warn('当前不支持', eventType, '事件');
@@ -46,11 +54,15 @@ export function initEvent(container: Container, eventType: string) {
 		console.log('初始化事件: ', eventType);
 	}
 	container.addEventListener(eventType, (e) => {
+		// 代理分发事件
 		dispatchEvent(container, eventType, e);
 	});
 }
 
-// 根据已有的 Event 事件对象，创建 SyntheticEvent 合成事件对象
+/**
+ * 根据已有的 Event 事件对象，创建 SyntheticEvent 合成事件对象
+ * @param e {Event} 事件对象
+ */
 function createSyntheticEvent(e: Event) {
 	const syntheticEvent = e as SyntheticEvent;
 	syntheticEvent.__stopPropagation = false;
@@ -65,6 +77,12 @@ function createSyntheticEvent(e: Event) {
 	return syntheticEvent;
 }
 
+/**
+ * React 代理分发事件
+ * @param container {Container} 事件绑定的根节点
+ * @param eventType {string} 事件类型
+ * @param e {Event} 事件对象
+ */
 function dispatchEvent(container: Container, eventType: string, e: Event) {
 	const targetElement = e.target;
 
@@ -89,10 +107,16 @@ function dispatchEvent(container: Container, eventType: string, e: Event) {
 	}
 }
 
-// 遍历 capture 或 bubble 数组，取决于传进来的是 capture 还是 bubble
+/**
+ * 遍历 capture 或 bubble 数组，取决于传进来的是 capture 还是 bubble
+ * @param paths {EventCallback[]} capture 数组或者 bubble 数组
+ * @param se {SyntheticEvent} React 合成事件实例对象
+ */
 function triggerEventFlow(paths: EventCallback[], se: SyntheticEvent) {
+	// 按照顺序依次执行事件回调
 	for (let i = 0; i < paths.length; i++) {
 		const callback = paths[i];
+		// 交给调度器执行对应的事件回调
 		unstable_runWithPriority(eventTypeToSchedulerPriority(se.type), () => {
 			callback.call(null, se);
 		});
@@ -103,8 +127,11 @@ function triggerEventFlow(paths: EventCallback[], se: SyntheticEvent) {
 	}
 }
 
-// 根据事件的名称获取事件的 callback 名字
-// 如：根据 click 获取 onClick 和 onClickCapture 这两个名字
+/**
+ * 根据事件名称获取事件的 callback 名字
+ * 如：根据 click 获取 onClick 和 onClickCapture 这两个名字
+ * @param eventType {string} 事件名称
+ */
 function getEventCallbackNameFromEventType(
 	eventType: string
 ): string[] | undefined {
@@ -114,7 +141,12 @@ function getEventCallbackNameFromEventType(
 	}[eventType];
 }
 
-// 收集 targetElement 到 container 沿途的 capture 和 bubble 事件
+/**
+ * 收集 targetElement 到 container 沿途的 capture 和 bubble 事件
+ * @param targetElement {DOMElement} 事件触发的节点
+ * @param container {Container} 事件绑定的根节点
+ * @param eventType {string} 事件类型
+ */
 function collectPaths(
 	targetElement: DOMElement,
 	container: Container,
@@ -134,8 +166,10 @@ function collectPaths(
 			const callbackNameList = getEventCallbackNameFromEventType(eventType);
 			if (callbackNameList) {
 				callbackNameList.forEach((callbackName, i) => {
+					// 获取开发者绑定的事件回调
 					const eventCallback = elementProps[callbackName];
 					if (eventCallback) {
+						// 这里对应 getEventCallbackNameFromEventType 中的顺序，0 为捕获阶段，1 为冒泡阶段
 						if (i === 0) {
 							// capture
 							paths.capture.unshift(eventCallback);
@@ -147,12 +181,17 @@ function collectPaths(
 				});
 			}
 		}
+		// 向上查找对应的父节点
 		targetElement = targetElement.parentNode as DOMElement;
 	}
+	// 返回收集到的事件
 	return paths;
 }
 
-// 根据不同的事件，转换成对应 Scheduler 中的优先级
+/**
+ * 根据不同的事件，转换成调度器 Scheduler 中的优先级
+ * @param eventType {string} 事件类型
+ */
 function eventTypeToSchedulerPriority(eventType: string) {
 	switch (eventType) {
 		case 'click':

@@ -147,7 +147,7 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		newChild: any[]
 	) {
 		// 记录在已经遍历过的 children 对应在 current 树中的 fiberNode 链表中最右位置对应的 index，也就是最大的 index
-		let lastPlacedIndex: number = 0;
+		let lastPlacedIndex = 0;
 		// 记录当前正在处理的 fiberNode 的变量
 		let lastNewFiber: FiberNode | null = null;
 		// 记录最新的 fiberNode 链表中的第一个 fiberNode 对象
