@@ -17,7 +17,12 @@ export interface UpdateQueue<State> {
 	dispatch: Dispatch<State> | null;
 }
 
-// 创建 Update 对象
+/**
+ * 创建 Update 对象
+ * @param action {Action<State>} 更新的 action 实例对象
+ * @param lane {Lane} 更新的优先级
+ * @template State
+ */
 export const createUpdate = <State>(
 	action: Action<State>,
 	lane: Lane
@@ -29,7 +34,10 @@ export const createUpdate = <State>(
 	};
 };
 
-// 创建 UpdateQueue
+/**
+ * 创建 UpdateQueue
+ * @template State
+ */
 export const createUpdateQueue = <State>() => {
 	return {
 		shared: {
@@ -39,7 +47,12 @@ export const createUpdateQueue = <State>() => {
 	} as UpdateQueue<State>;
 };
 
-// 将 Update 实例对象放进 updateQueue 中
+/**
+ * 将 Update 实例对象放进 updateQueue 中
+ * @param updateQueue {UpdateQueue<State>} 承载 Update 实例对象的 updateQueue
+ * @param update {Update<State>} 需要放进 updateQueue 中的 Update 实例对象
+ * @template State
+ */
 export const enqueueUpdate = <State>(
 	updateQueue: UpdateQueue<State>,
 	update: Update<State>
@@ -60,7 +73,15 @@ export const enqueueUpdate = <State>(
 	updateQueue.shared.pending = update;
 };
 
-// 实现 baseState 和 Update 对象进行比对，得出最新的 memoizedState
+/**
+ * 根据给定的 pendingUpdate 链表和 baseState 计算出最新的 memoizedState
+ * 这里需要注意，从第一个被跳过的 Update 开始，之后的 Update 实例对象都需要进行进行 clone 操作并存放回 baseQueue 中
+ * 上方一行注释所做的操作，是为了保证在更新过程中，不会丢失任何一个 Update 实例对象，保证最后的 memoizedState 是正确的
+ * @param baseState {State} 初始状态
+ * @param pendingUpdate {Update<State> | null} Update 链表中最后一个插入的 Update 对象，也意味着是一个环状链表
+ * @param renderLane {Lane} 更新的优先级
+ * @template State
+ */
 export const processUpdateQueue = <State>(
 	baseState: State,
 	pendingUpdate: Update<State> | null,

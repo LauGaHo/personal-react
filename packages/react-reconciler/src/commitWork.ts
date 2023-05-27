@@ -30,8 +30,12 @@ import { HookHasEffect } from './hookEffectTags';
 
 let nextEffect: FiberNode | null = null;
 
-// commit 阶段逻辑
-// phrase: 标志着当前是 commit 阶段中的哪个子阶段，如 mutation 阶段还是 layout 阶段
+/**
+ * commit 阶段对各个子阶段的包装
+ * @param phrase {'mutation' | 'layout'} 标志当前是 commit 阶段中的哪一个子阶段，如 mutation 阶段还是 layout 阶段
+ * @param mask {Flags} 标志当前子阶段对哪些副作用进行处理
+ * @param callback {(fiber: FiberNode, root: FiberRootNode) => void} 自己对应回调函数
+ */
 export const commitEffects = (
 	phrase: 'mutation' | 'layout',
 	mask: Flags,
@@ -66,7 +70,11 @@ export const commitEffects = (
 	};
 };
 
-// Mutation 阶段对应某一个 fiber 的具体操作
+/**
+ * commit 阶段中的 Mutation 子阶段对应某一个 fiber 节点的具体操作
+ * @param finishedWork {FiberNode} 当前正在处理的 fiber 节点
+ * @param root {FiberRootNode} 当前正在处理的 fiber 节点所在的 fiberRoot
+ */
 const commitMutationEffectsOnFiber = (
 	finishedWork: FiberNode,
 	root: FiberRootNode
@@ -108,7 +116,10 @@ const commitMutationEffectsOnFiber = (
 	}
 };
 
-// 移除 Ref 绑定
+/**
+ * 移除 Ref 绑定
+ * @param current {FiberNode} 当前正在处理的 fiber 节点
+ */
 function safelyDetachRef(current: FiberNode) {
 	const ref = current.ref;
 	if (ref !== null) {
@@ -120,7 +131,11 @@ function safelyDetachRef(current: FiberNode) {
 	}
 }
 
-// Layout 阶段针对某一个 fiber 的具体操作
+/**
+ * commit 阶段中的 Layout 子阶段对应某一个 fiber 节点的具体操作
+ * @param finishedWork {FiberNode} 当前正在处理的 fiber 节点
+ * @param root {FiberRootNode} 当前正在处理的 fiber 节点所在的 fiberRoot
+ */
 const commitLayoutEffectsOnFiber = (
 	finishedWork: FiberNode,
 	root: FiberRootNode
@@ -134,7 +149,10 @@ const commitLayoutEffectsOnFiber = (
 	}
 };
 
-// 为 ref 绑定对应 DOM
+/**
+ * 为 ref 绑定对应 DOM
+ * @param fiber {FiberNode} 当前正在处理的 fiber 节点
+ */
 function safelyAttachRef(fiber: FiberNode) {
 	const ref = fiber.ref;
 	if (ref !== null) {
@@ -147,21 +165,30 @@ function safelyAttachRef(fiber: FiberNode) {
 	}
 }
 
-// 某个 fiberNode 节点的 subtreeFlags 或 flags 不为 NoFlags 就会进来该函数通过遍历，查找对应的节点，并执行对应的副作用
+/**
+ * commit 阶段中的 mutation 子阶段需要执行的工作，这里是通过 commitEffects 函数包装后返回的函数，是 mutation 阶段的入口
+ */
 export const commitMutationEffects = commitEffects(
 	'mutation',
 	MutationMask | PassiveMask,
 	commitMutationEffectsOnFiber
 );
 
-// commit 阶段中的 layout 子阶段需要执行的工作
+/**
+ * commit 阶段中的 layout 子阶段需要执行的工作，这里是通过 commitEffects 函数包装后返回的函数，是 layout 阶段的入口
+ */
 export const commitLayoutEffects = commitEffects(
 	'layout',
 	LayoutMask,
 	commitLayoutEffectsOnFiber
 );
 
-// useEffect 收集回调
+/**
+ * 收集本轮更新需要执行的副作用回调，收集的是 useEffect 的回调函数
+ * @param fiber {FiberNode} 当前正在处理的 fiber 节点
+ * @param root {FiberRootNode} 当前正在处理的 fiber 节点所在的 fiberRoot
+ * @param type {keyof PendingPassiveEffects} 本轮更新需要执行的副作用回调的类型，可能的取值为 'update' 和 'unmount'
+ */
 function commitPassiveEffect(
 	fiber: FiberNode,
 	root: FiberRootNode,
@@ -188,7 +215,12 @@ function commitPassiveEffect(
 	}
 }
 
-// 传入 Effect 环形连中的最后一个，然后遍历 Effect 链表，判断每一个 Effect 实体是否符合执行副作用的条件，若符合，执行传入的 callback
+/**
+ * 传入 Effect 环形连中的最后一个，然后遍历 Effect 链表，判断每一个 Effect 实体是否符合执行副作用的条件，若符合，执行传入的 callback
+ * @param flags {Flags} 需要执行的 Effect 的 tag
+ * @param lastEffect {Effect} Effect 环形链中的最后一个 Effect
+ * @param callback {(effect: Effect) => void} 需要执行的回调函数
+ */
 function commitHookEffectList(
 	flags: Flags,
 	lastEffect: Effect,
@@ -205,7 +237,11 @@ function commitHookEffectList(
 	} while (effect !== lastEffect.next);
 }
 
-// 对 Effect 环形链中的 Effect 实例对象执行 Unmount 逻辑
+/**
+ * 对 Effect 环形链中的 Effect 实例对象执行 Unmount 逻辑
+ * @param flags {Flags} 需要执行的 Effect 的 tag
+ * @param lastEffect {Effect} Effect 环形链中的最后一个 Effect
+ */
 export function commitHookEffectListUnmount(flags: Flags, lastEffect: Effect) {
 	commitHookEffectList(flags, lastEffect, (effect) => {
 		const destroy = effect.destroy;
@@ -216,7 +252,11 @@ export function commitHookEffectListUnmount(flags: Flags, lastEffect: Effect) {
 	});
 }
 
-// 对 Effect 环形链中的 Effect 实例对象执行 Destroy 逻辑
+/**
+ * 对 Effect 环形链中的 Effect 实例对象执行 Destroy 逻辑
+ * @param flags {Flags}	需要执行的 Effect 的 tag
+ * @param lastEffect {Effect} Effect 环形链中的最后一个 Effect
+ */
 export function commitHookEffectListDestroy(flags: Flags, lastEffect: Effect) {
 	commitHookEffectList(flags, lastEffect, (effect) => {
 		const destroy = effect.destroy;
@@ -226,7 +266,11 @@ export function commitHookEffectListDestroy(flags: Flags, lastEffect: Effect) {
 	});
 }
 
-// 对 Effect 环形链中的 Effect 实例对象执行 Create 逻辑
+/**
+ * 对 Effect 环形链中的 Effect 实例对象执行 Create 逻辑
+ * @param flags {Flags} 需要执行的 Effect 的 tag
+ * @param lastEffect {Effect} Effect 环形链中的最后一个 Effect
+ */
 export function commitHookEffectListCreate(flags: Flags, lastEffect: Effect) {
 	commitHookEffectList(flags, lastEffect, (effect) => {
 		const create = effect.create;
@@ -264,7 +308,11 @@ function recordHostChildrenToDelete(
 	// 2. 没找到一个 host 节点，判断一下这个节点是不是第 1 找到那个节点的兄弟节点
 }
 
-// 提交 Delete 操作函数逻辑
+/**
+ * 提交 Delete 操作函数逻辑
+ * @param childToDelete {FiberNode} 需要被删除的 FiberNode 节点
+ * @param root {FiberRootNode} 当前 FiberNode 对应的 FiberRootNode 节点
+ */
 function commitDeletion(childToDelete: FiberNode, root: FiberRootNode) {
 	// 定义变量记录被删除的 DOM 的根节点
 	const rootChildrenToDelete: FiberNode[] = [];
@@ -310,8 +358,11 @@ function commitDeletion(childToDelete: FiberNode, root: FiberRootNode) {
 	childToDelete.child = null;
 }
 
-// 递归遍历需要被删除的 root 下的 child，并执行传入的 onCommitUnmount
-// onCommitUnmount 箭头函数的目的：为了能够为 root 下的各个 child 执行对应的删除前操作
+/**
+ * 递归遍历被删除的 fiberNode 的子树，并执行传入的 onCommitUnmount
+ * @param root {FiberNode} 需要被删除的 FiberNode 节点
+ * @param onCommitUnmount {(fiber: FiberNode) => void} 删除前执行的函数
+ */
 function commitNestedComponent(
 	root: FiberNode,
 	onCommitUnmount: (fiber: FiberNode) => void

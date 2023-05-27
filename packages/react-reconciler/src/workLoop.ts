@@ -48,6 +48,11 @@ const RootInComplete = 1;
 const RootCompleted = 2;
 // TODO 执行过程中报错了
 
+/**
+ * render 过程前的刷新程序执行的栈帧
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ * @param lane {Lane} 优先级
+ */
 function prepareFreshStack(root: FiberRootNode, lane: Lane) {
 	// 重置 FiberRootNode 相关属性
 	root.finishedLane = NoLane;
@@ -57,6 +62,11 @@ function prepareFreshStack(root: FiberRootNode, lane: Lane) {
 	wipRootRenderLane = lane;
 }
 
+/**
+ * 调度执行 render 过程的入口
+ * @param fiber {FiberNode} 触发 render 的 Fiber 节点
+ * @param lane {Lane} 优先级
+ */
 export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
 	// TODO 调度功能
 	const root = markUpdateFromFiberToRoot(fiber);
@@ -65,7 +75,10 @@ export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
 	ensureRootIsScheduled(root);
 }
 
-// schedule 阶段入口
+/**
+ * schedule 阶段入口
+ * @param root {FiberRootNode} fiber 树的根节点
+ */
 function ensureRootIsScheduled(root: FiberRootNode) {
 	// 获取当前最高的优先级
 	const updateLane = getHighestPriorityLane(root.pendingLanes);
@@ -132,12 +145,19 @@ function ensureRootIsScheduled(root: FiberRootNode) {
 	root.callbackPriority = curPriority;
 }
 
-// 将当前新增的优先级合并到 FiberRootNode 中的 pendingLanes
+/**
+ * 将当前新增的优先级合并到 FiberRootNode 中的 pendingLanes
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ * @param lane {Lane} 优先级
+ */
 function markRootUpdated(root: FiberRootNode, lane: Lane) {
 	root.pendingLanes = mergeLanes(root.pendingLanes, lane);
 }
 
-// 给定一个 fiberNode，向上遍历直到找到 hostRootFiber
+/**
+ * 给定一个 fiberNode，向上遍历直到找到 hostRootFiber
+ * @param fiber {FiberNode} Fiber 节点，一般为触发更新的 Fiber 节点
+ */
 function markUpdateFromFiberToRoot(fiber: FiberNode) {
 	let node = fiber;
 	let parent = node.return;
@@ -151,7 +171,11 @@ function markUpdateFromFiberToRoot(fiber: FiberNode) {
 	return null;
 }
 
-// 并发更新
+/**
+ * 并发更新的入口
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ * @param didTimeout {boolean} 是否超时
+ */
 function performConcurrentWorkOnRoot(
 	root: FiberRootNode,
 	didTimeout: boolean
@@ -159,6 +183,8 @@ function performConcurrentWorkOnRoot(
 	// 保证 useEffect 回调执行
 	const curCallback = root.callbackNode;
 	// 刷新当前所有的 useEffect 回调，并返回一个 boolean 类型的值，标识是否执行了 useEffect 回调
+	// 这里需要执行一遍 flushPassiveEffects 的原因在于，在 commit 阶段，flushPassiveEffects 是被调度器 Scheduler 用 NormalPriority 优先级调度的
+	// 但是有可能 commit 阶段完了之后，还有比 NormalPriority 优先级更高的 render 任务，就会导致 useEffect 回调没有执行，所以需要保证下一次 commit 之前，要清空上一次的 useEffect 回调，所以这里才会再执行了一次 flushPassiveEffects
 	const didFlushPassiveEffect = flushPassiveEffects(root.pendingPassiveEffects);
 	// 若执行了 useEffect 回调，则需要观察执行回调时有无产生新的调度任务
 	// 此时如果 root.callbackNode !== curCallback 满足，说明在 useEffect 回调执行的时候产生了比当前任务更高优先级的任务
@@ -216,7 +242,10 @@ function performConcurrentWorkOnRoot(
 	}
 }
 
-// 同步更新的入口
+/**
+ * 同步更新的入口
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ */
 function performSyncWorkOnRoot(root: FiberRootNode) {
 	const nextLane = getHighestPriorityLane(root.pendingLanes);
 
@@ -248,7 +277,12 @@ function performSyncWorkOnRoot(root: FiberRootNode) {
 	}
 }
 
-// render 阶段的逻辑，分为同步和并发
+/**
+ * render 阶段的逻辑，分为同步和并发
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ * @param lane {Lane} 优先级
+ * @param shouldTimeSlice {boolean} 是否需要切片
+ */
 function renderRoot(root: FiberRootNode, lane: Lane, shouldTimeSlice: boolean) {
 	if (__DEV__) {
 		console.log(`开始${shouldTimeSlice ? '并发' : '同步'}更新`, root);
@@ -287,7 +321,10 @@ function renderRoot(root: FiberRootNode, lane: Lane, shouldTimeSlice: boolean) {
 	return RootCompleted;
 }
 
-// 提交到 commit 阶段
+/**
+ * 提交到 commit 阶段
+ * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
+ */
 function commitRoot(root: FiberRootNode) {
 	// 使用临时变量 finishedWork 存放 root.finishedWork
 	const finishedWork = root.finishedWork;
@@ -358,7 +395,10 @@ function commitRoot(root: FiberRootNode) {
 	ensureRootIsScheduled(root);
 }
 
-// 执行所有的 useEffect 回调函数，这个函数执行完，代表没有任何的 useEffect 没被执行
+/**
+ * 执行所有的 useEffect 回调函数，这个函数执行完，代表没有任何的 useEffect 没被执行
+ * @param pendingPassiveEffects {PendingPassiveEffects} 正在 pending 阶段等待执行的 Effect 链表
+ */
 function flushPassiveEffects(pendingPassiveEffects: PendingPassiveEffects) {
 	let didFlushPassiveEffect = false;
 	// 遍历 FiberRootNode.pendingPassiveEffects 中的 unmount 属性中的 Effect 链表执行 unmount 操作
@@ -395,20 +435,28 @@ function flushPassiveEffects(pendingPassiveEffects: PendingPassiveEffects) {
 	return didFlushPassiveEffect;
 }
 
-// 同步执行 workLoop 函数
+/**
+ * 同步执行 workLoop 函数
+ */
 function workLoopSync() {
 	while (workInProgress !== null) {
 		performUnitOfWork(workInProgress);
 	}
 }
 
-// 并发切片执行 workLoop 函数
+/**
+ * 并发切片执行 workLoop 函数
+ */
 function workLoopConcurrent() {
 	while (workInProgress !== null && !unstable_shouldYield()) {
 		performUnitOfWork(workInProgress);
 	}
 }
 
+/**
+ * 构造 fiber 树的入口函数
+ * @param fiber {FiberNode} workInProgress 指针对应指向的 fiber 节点
+ */
 function performUnitOfWork(fiber: FiberNode) {
 	const next = beginWork(fiber, wipRootRenderLane);
 	fiber.memoizedProps = fiber.pendingProps;
@@ -420,6 +468,10 @@ function performUnitOfWork(fiber: FiberNode) {
 	}
 }
 
+/**
+ * fiber 树构造的归阶段
+ * @param fiber {FiberNode} workInProgress 指针对应指向的 fiber 节点
+ */
 function completeUnitOfWork(fiber: FiberNode) {
 	let node: FiberNode | null = fiber;
 

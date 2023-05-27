@@ -15,6 +15,11 @@ import {
 } from './workTags';
 import { Ref } from './fiberFlags';
 
+/**
+ * fiber tree 中的 render 阶段的开始的递阶段
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ * @param renderLane {Lane} 渲染优先级
+ */
 export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	// 比较，并返回子 fiberNode
 	switch (wip.tag) {
@@ -42,19 +47,32 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	return null;
 };
 
+/**
+ * 针对 Fragment 类型 Fiber 节点的 update 操作
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 function updateFragment(wip: FiberNode) {
 	const nextChildren = wip.pendingProps;
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
 }
 
+/**
+ * 针对 FunctionComponent 类型 Fiber 节点的 update 操作
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ * @param renderLane {Lane} 渲染优先级
+ */
 function updateFunctionComponent(wip: FiberNode, renderLane: Lane) {
 	const nextChildren = renderWithHooks(wip, renderLane);
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
 }
 
-// 针对 HostRootFiber 的 mount 逻辑
+/**
+ * 针对 HostRoot 类型 Fiber 节点的 update 操作
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ * @param renderLane {Lane} 渲染优先级
+ */
 function updateHostRoot(wip: FiberNode, renderLane: Lane) {
 	// 获取 wip 原本的 state
 	const baseState = wip.memoizedState;
@@ -76,8 +94,11 @@ function updateHostRoot(wip: FiberNode, renderLane: Lane) {
 	return wip.child;
 }
 
-// 针对 HostComponent 的 mount 逻辑
-// 形如：<div><span><span/><div/> 节点，对于 div 节点来说，span 作为其 children，其信息处在 div 中的 pendingProps 中的 children 中
+/**
+ * 针对 HostComponent 类型 Fiber 节点的 update 操作
+ * 形如：<div><span><span/><div/> 节点，对于 div 节点来说，span 作为其 children，其信息处在 div 中的 pendingProps 中的 children 中
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 function updateHostComponent(wip: FiberNode) {
 	// 获取 HostComponent 节点的 children 属性
 	const nextProps = wip.pendingProps;
@@ -89,6 +110,11 @@ function updateHostComponent(wip: FiberNode) {
 	return wip.child;
 }
 
+/**
+ * 协调算法，用于生成子节点的 fiberNode
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ * @param children {ReactElementType} 子节点的 ReactElementType 实例对象
+ */
 function reconcileChildren(wip: FiberNode, children?: ReactElementType) {
 	const current = wip.alternate;
 
@@ -101,7 +127,11 @@ function reconcileChildren(wip: FiberNode, children?: ReactElementType) {
 	}
 }
 
-// 标记 Ref
+/**
+ * 标记 Ref
+ * @param current {FiberNode | null} 当前页面 DOM 树对应的 Fiber 节点
+ * @param workInProgress {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 function markRef(current: FiberNode | null, workInProgress: FiberNode) {
 	// 获取当前的 ref
 	const ref = workInProgress.ref;

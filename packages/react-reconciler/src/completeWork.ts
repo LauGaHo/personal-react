@@ -15,16 +15,27 @@ import {
 	HostText
 } from './workTags';
 
-// 标记 Ref
+/**
+ * 标记 Ref
+ * @param fiber {FiberNode} 需要被标记的 fiber 节点
+ */
 function markRef(fiber: FiberNode) {
 	fiber.flags |= Ref;
 }
 
-// 标记更新 flags
+/**
+ * 标记 Update 的 flags
+ * @param fiber {FiberNode} 需要被标记的 fiber 节点
+ */
 function markUpdate(fiber: FiberNode) {
 	fiber.flags |= Update;
 }
 
+/**
+ * mount 阶段：将 wip.child 对应的 DOM 挂载到刚创建出来的 DOM 上，形成一棵离屏的 DOM 树
+ * update 阶段：比较 props 是否更改，若更改，则打上 Update 的 flags，否则不做任何操作。还有就是标记 Ref
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 export const completeWork = (wip: FiberNode) => {
 	// 递归中的归
 
@@ -94,7 +105,11 @@ export const completeWork = (wip: FiberNode) => {
 	}
 };
 
-// 将 wip.child 对应的 DOM 挂载到刚创建出来的 DOM 上，形成一棵离屏的 DOM 树
+/**
+ * 将 wip.child 对应的 DOM 挂载到刚创建出来的 DOM (指代 parent) 上，形成一棵离屏的 DOM 树
+ * @param parent {Container | Instance} 表示刚创建出来的 DOM，这里可以理解为是时 wip 对应的 DOM
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 function appendAllChildren(parent: Container | Instance, wip: FiberNode) {
 	// 获取当前 wip 的子节点 fiberNode
 	let node = wip.child;
@@ -130,7 +145,10 @@ function appendAllChildren(parent: Container | Instance, wip: FiberNode) {
 	}
 }
 
-// 将子孙节点的操作 flags 一级级往上冒泡到 wip 的 subtreeFlags 属性中
+/**
+ * 将子孙节点的操作 flags 一级级往上冒泡到 wip 的 subtreeFlags 属性中
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
 function bubbleProperties(wip: FiberNode) {
 	let subtreeFlags = NoFlags;
 	let child = wip.child;

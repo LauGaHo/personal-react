@@ -11,8 +11,17 @@ import { Fragment, HostText } from './workTags';
 
 type ExistingChildren = Map<string | number, FiberNode>;
 
+/**
+ * 生成 reconcileChildren 函数的函数
+ * @param shouldTrackEffects {boolean} 是否追踪副作用
+ * @constructor {function} 返回 reconcileChildren 函数
+ */
 function ChildReconciler(shouldTrackEffects: boolean) {
-	// 为 FiberNode 的 flags 属性标记对应的 ChildDeletion 的 flags
+	/**
+	 * 删除某节点，为 FiberNode 的 flags 属性标记对应的 ChildDeletion 的 flags
+	 * @param returnFiber {FiberNode} 被删目标节点的父节点
+	 * @param childToDelete {FiberNode} 被删目标节点
+	 */
 	function deleteChild(returnFiber: FiberNode, childToDelete: FiberNode) {
 		if (!shouldTrackEffects) {
 			return;
@@ -29,7 +38,11 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		}
 	}
 
-	// 删除某节点并删除该节点右边的所有兄弟节点
+	/**
+	 * 删除某节点并删除该节点右边的所有兄弟节点
+	 * @param returnFiber {FiberNode} 被删目标节点的父节点
+	 * @param currentFirstChild {FiberNode | null} 被删目标节点的第一个子节点
+	 */
 	function deleteRemainingChildren(
 		returnFiber: FiberNode,
 		currentFirstChild: FiberNode | null
@@ -46,7 +59,12 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		}
 	}
 
-	// 根据 ReactElementType 生成对应的 fiberNode 节点
+	/**
+	 * 根据 ReactElement 创建 FiberNode 节点
+	 * @param returnFiber {FiberNode} 目标节点的父节点
+	 * @param currentFiber {FiberNode | null} current 树下对应 element 的 FiberNode 节点
+	 * @param element {ReactElementType} 目标节点的 ReactElement 实例对象
+	 */
 	function reconcileSingleElement(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
@@ -104,7 +122,12 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
-	// 根据对应的 textContent 生成文本节点对应的 fiberNode 节点
+	/**
+	 * 根据对应的 textContent 生成文本节点对应的 fiberNode 节点
+	 * @param returnFiber {FiberNode} 目标节点的父节点
+	 * @param currentFiber {FiberNode | null} current 树下对应 element 的 FiberNode 节点
+	 * @param content {string | number} 目标节点的 textContent
+	 */
 	function reconcileSingleTextNode(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
@@ -132,7 +155,10 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
-	// 判断是否需要打 flag
+	/**
+	 * 判断是否需要打 flag
+	 * @param fiber {FiberNode} 目标节点的父节点
+	 */
 	function placeSingleChild(fiber: FiberNode) {
 		if (shouldTrackEffects && fiber.alternate === null) {
 			fiber.flags |= Placement;
@@ -140,7 +166,12 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return fiber;
 	}
 
-	// 根据对应的 Array 对象生成对应的 FiberNode 类型数组
+	/**
+	 * 根据对应的 Array 对象生成对应的 FiberNode 类型数组
+	 * @param returnFiber {FiberNode} 目标节点的父节点
+	 * @param currentFirstChild {FiberNode} current 树下对应的数组元素中的第一个 child 元素
+	 * @param newChild {any[]} 目标节点的 children，此处的目标节点是一个数组
+	 */
 	function reconcileChildrenArray(
 		returnFiber: FiberNode,
 		currentFirstChild: FiberNode | null,
@@ -224,6 +255,13 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return firstNewFiber;
 	}
 
+	/**
+	 * 在对 Array 的 ReactElement 进行遍历时，会通过观察其 child 是否在 existingChildren 这个 Map 中从而判断是否可以复用
+	 * @param returnFiber {FiberNode} 目标节点的父节点
+	 * @param existingChildren {Map} 保存了 Array 中的所有 children 的 Map 对象
+	 * @param index {number} 当前正在处理的 child 在 Array 中的 index
+	 * @param element {any} 当前正在处理的 child 对应的 ReactElement 实例对象
+	 */
 	function updateFromMap(
 		returnFiber: FiberNode,
 		existingChildren: ExistingChildren,
@@ -291,7 +329,12 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return null;
 	}
 
-	// 返回给外界用于根据 element 不同类型生成不同的 fiberNode 的方法
+	/**
+	 * 根据 element 的类型生成不同的 fiberNode
+	 * @param returnFiber {FiberNode} 目标节点的父节点
+	 * @param currentFiber {FiberNode | null} current 树中对应的 fiberNode 实例对象
+	 * @param newChild {any | null} 当前正在处理的 child 对应的 ReactElement 实例对象
+	 */
 	return function reconcileChildFibers(
 		returnFiber: FiberNode,
 		currentFiber: FiberNode | null,
@@ -350,7 +393,11 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 	};
 }
 
-// 复用 fiberNode 逻辑
+/**
+ * 复用 fiberNode 逻辑
+ * @param fiber {FiberNode} current 树上对应的 fiberNode
+ * @param pendingProps {Props} 新的 props，一般是从 ReactElement 中获取
+ */
 function useFiber(fiber: FiberNode, pendingProps: Props): FiberNode {
 	// 根据 current 的 fiberNode 传入到 createWorkInProgress 函数得到复用的 fiberNode，也就是current 的 alternate
 	const clone = createWorkInProgress(fiber, pendingProps);
@@ -360,7 +407,14 @@ function useFiber(fiber: FiberNode, pendingProps: Props): FiberNode {
 	return clone;
 }
 
-// 使用 Fragment 类型的 ReactElement 和 fiberNode 比对，判断是否能复用
+/**
+ * 使用 Fragment 类型的 ReactElement 和 fiberNode 比对，判断是否能复用
+ * @param returnFiber {FiberNode} 目标节点的父节点
+ * @param current {FiberNode | undefined} current 树上对应的 fiberNode
+ * @param elements {any[]} Fragment 类型的 ReactElement
+ * @param key {Key} Fragment 类型的 ReactElement 的 key
+ * @param existingChildren {ExistingChildren} fragment 中的 child 的 map 集合，用于比对是否可以复用
+ */
 function updateFragment(
 	returnFiber: FiberNode,
 	current: FiberNode | undefined,

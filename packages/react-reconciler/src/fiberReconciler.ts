@@ -15,7 +15,10 @@ import {
 import { scheduleUpdateOnFiber } from './workLoop';
 import { HostRoot } from './workTags';
 
-// 创建 fiberRootNode，并把 fiberRootNode 和 hostRootFiber 关联起来
+/**
+ * 创建 fiberRootNode，并把 fiberRootNode 和 hostRootFiber 关联起来
+ * @param container {Container} 容器
+ */
 export function createContainer(container: Container) {
 	const hostRootFiber = new FiberNode(HostRoot, {}, null);
 	const root = new FiberRootNode(container, hostRootFiber);
@@ -23,7 +26,11 @@ export function createContainer(container: Container) {
 	return root;
 }
 
-// 创建 Update 对象，并把 Update 对象 enqueue 到 updateQueue 中
+/**
+ * 创建 Update 对象，并把 Update 对象 enqueue 到 updateQueue 中
+ * @param element {ReactElementType | null} 需要更新的元素，一般是根元素
+ * @param root {FiberRootNode} fiberRootNode 实例对象，对应是 fiber 的根节点
+ */
 export function updateContainer(
 	element: ReactElementType | null,
 	root: FiberRootNode

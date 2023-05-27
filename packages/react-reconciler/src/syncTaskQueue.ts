@@ -3,7 +3,10 @@ let syncQueue: ((...args: any) => void)[] | null = null;
 // 记录当前是否正在进行刷新、清空执行 syncQueue 队列
 let isFlushingSyncQueue = false;
 
-// 调度任务阶段，将传入的回调函数存储在 syncQueue 数组中
+/**
+ * 调度任务阶段，将传入的回调函数存储在 syncQueue 数组中
+ * @param callback {(...args: any) => void} 需要被同步调度的回调函数
+ */
 export function scheduleSyncCallback(callback: (...args: any) => void) {
 	if (syncQueue === null) {
 		syncQueue = [callback];
@@ -12,7 +15,9 @@ export function scheduleSyncCallback(callback: (...args: any) => void) {
 	}
 }
 
-// 刷新、清空执行 syncQueue 数组
+/**
+ * 刷新、清空执行 syncQueue 数组
+ */
 export function flushSyncCallbacks() {
 	if (!isFlushingSyncQueue && syncQueue) {
 		// 将 isFlushingSyncQueue 变量设置为 true，表示正在进行刷新 syncQueue 数组操作

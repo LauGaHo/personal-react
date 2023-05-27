@@ -64,7 +64,11 @@ type EffectCallback = () => void;
 // 声明 useEffect 所需的依赖的类型 EffectDeps
 type EffectDeps = any[] | null;
 
-// render 阶段对函数组件中的 Hook 的处理
+/**
+ * render 阶段对函数组件中的 Hook 的处理
+ * @param wip {FiberNode} workInProgress 树对应的 fiber 节点
+ * @param lane {Lane} 优先级
+ */
 export function renderWithHooks(wip: FiberNode, lane: Lane) {
 	// 执行赋值操作
 	currentlyRenderingFiber = wip;
@@ -113,7 +117,11 @@ const HookDispatcherOnUpdate: Dispatcher = {
 	useRef: updateRef
 };
 
-// mount 阶段 useRef 钩子实现
+/**
+ * mount 阶段 useRef 钩子实现
+ * @template T
+ * @param initialValue {T} 初始值
+ */
 function mountRef<T>(initialValue: T): { current: T } {
 	// 创建一个 useRef 对应的 Hook 实例对象
 	const hook = mountWorkInProgressHook();
@@ -125,7 +133,11 @@ function mountRef<T>(initialValue: T): { current: T } {
 	return ref;
 }
 
-// update 阶段 useRef 钩子实现
+/**
+ * update 阶段 useRef 钩子实现
+ * @template T
+ * @param initialValue {T} 初始值
+ */
 function updateRef<T>(initialValue: T): { current: T } {
 	// 获取当前正在处理的 Hook 实例对象
 	const hook = updateWorkInProgressHook();
@@ -133,7 +145,9 @@ function updateRef<T>(initialValue: T): { current: T } {
 	return hook.memoizedState;
 }
 
-// mount 阶段 useTransition 钩子实现
+/**
+ * mount 阶段 useTransition 钩子实现
+ */
 function mountTransition(): [boolean, (callback: () => void) => void] {
 	// 创建一个 state 并且命名为 isPending 变量
 	const [isPending, setPending] = mountState(false);
@@ -145,7 +159,11 @@ function mountTransition(): [boolean, (callback: () => void) => void] {
 	return [isPending, start];
 }
 
-// useTransition 返回的方法
+/**
+ * useTransition 返回的方法
+ * @param setPending {Dispatch<boolean>} useState 返回的 dispatch 方法
+ * @param callback {() => void} 传入的回调函数
+ */
 function startTransition(setPending: Dispatch<boolean>, callback: () => void) {
 	// 先触发一次高优先级的同步更新
 	setPending(true);
@@ -160,7 +178,11 @@ function startTransition(setPending: Dispatch<boolean>, callback: () => void) {
 	currentBatchConfig.transition = prevTransition;
 }
 
-// mount 阶段下 useEffect 对应的 Dispatch
+/**
+ * mount 阶段下 useEffect 对应的 Dispatch
+ * @param create {EffectCallback | void} useEffect 传入的回调函数
+ * @param deps {EffectDeps | void} useEffect 传入的依赖
+ */
 function mountEffect(create: EffectCallback | void, deps: EffectDeps | void) {
 	// 创建一个 Hook 实例对象
 	const hook = mountWorkInProgressHook();
@@ -178,7 +200,9 @@ function mountEffect(create: EffectCallback | void, deps: EffectDeps | void) {
 	);
 }
 
-// update 阶段下的 useTransition 实现
+/**
+ * update 阶段下的 useTransition 实现
+ */
 function updateTransition(): [boolean, (callback: () => void) => void] {
 	// 由于 useTransition 中内嵌了一个 useState，所以在 updateTransition 中先获取对应的 useState 的 hook，再获取 useTransition 对应的 hook
 	const [isPending] = updateState();
@@ -189,7 +213,11 @@ function updateTransition(): [boolean, (callback: () => void) => void] {
 	return [isPending as boolean, start];
 }
 
-// update 阶段下 useEffect 对应的 Dispatch
+/**
+ * update 阶段下 useEffect 对应的 Dispatch
+ * @param create {EffectCallback | void} useEffect 传入的回调函数
+ * @param deps {EffectDeps | void} useEffect 传入的依赖
+ */
 function updateEffect(create: EffectCallback | void, deps: EffectDeps | void) {
 	// 获取可复用的 Hook 实例对象
 	const hook = updateWorkInProgressHook();
@@ -226,7 +254,11 @@ function updateEffect(create: EffectCallback | void, deps: EffectDeps | void) {
 	}
 }
 
-// 比较 useEffect 这个 Hook 的依赖是否相等，通过浅比较
+/**
+ * 浅比较 useEffect 的依赖是否相等
+ * @param nextDeps {EffectDeps} useEffect 传入的依赖（新）
+ * @param prevDeps {EffectDeps} useEffect 传入的依赖（旧）
+ */
 function areHookInputsEqual(nextDeps: EffectDeps, prevDeps: EffectDeps) {
 	if (prevDeps === null || nextDeps === null) {
 		return false;
@@ -242,7 +274,13 @@ function areHookInputsEqual(nextDeps: EffectDeps, prevDeps: EffectDeps) {
 	return true;
 }
 
-// 构建一个 Effect 实例对象，并跟已有的 Effect 对象形成一条闭环的链表(Effect 环形链表存放在 FiberNode.updateQueue 中)，并最终返回最新的 Effect 实例对象
+/**
+ * 构建一个 Effect 实例对象，并跟已有的 Effect 对象形成一条闭环的链表(Effect 环形链表存放在 FiberNode.updateQueue 中)，并最终返回最新的 Effect 实例对象
+ * @param hookFlag {Flags} Hook 标志位
+ * @param create {EffectCallback | void} useEffect 传入的回调函数
+ * @param destroy {EffectCallback | void} useEffect 传入的 destroy 回调函数
+ * @param deps {EffectDeps} useEffect 传入的依赖
+ */
 function pushEffect(
 	hookFlag: Flags,
 	create: EffectCallback | void,
@@ -292,7 +330,10 @@ function pushEffect(
 	return effect;
 }
 
-// 创建一个 FCUpdateQueue 实例对象
+/**
+ * 创建一个 FCUpdateQueue 实例对象
+ * @template State
+ */
 function createFCUpdateQueue<State>() {
 	// 通过 createUpdateQueue 创建一个队列，并将创建出来的对象作为 FCUpdateQueue 来看待
 	const updateQueue = createUpdateQueue<State>() as FCUpdateQueue<State>;
@@ -301,9 +342,13 @@ function createFCUpdateQueue<State>() {
 	return updateQueue;
 }
 
-// update 阶段 useState 对应的 Dispatch
+/**
+ * update 阶段 useState 对应的 Dispatch
+ * @template State
+ */
 function updateState<State>(): [State, Dispatch<State>] {
 	// 为当前正在 mount 的 fiber 创建对应 Hook 链，并返回当前 Hook 实例对象
+	// 注意：这里这个 hook 跟 currentHook 之间的关系是：currentHook 指向的是 current 树上对应的 hook 实例对象，而 hook 指向的是 workInProgress 树上对应的 hook 实例对象
 	const hook = updateWorkInProgressHook();
 
 	// 计算当前 useState 的 Hook 的最新值并赋值到 memoizedState 变量中
@@ -319,7 +364,7 @@ function updateState<State>(): [State, Dispatch<State>] {
 	let baseQueue = current.baseQueue;
 
 	if (pending !== null) {
-		// pendingUpdate 和 baseQueue 合并的解雇需要保存在 current 树中，防止更新被中断，下次更新再次从 current 中寻找对应的 update 实例对象
+		// pendingUpdate 和 baseQueue 合并的结果需要保存在 current 树中，防止更新被中断，下次更新再次从 current 中寻找对应的 update 实例对象
 		if (baseQueue !== null) {
 			// 将 pendingUpdate 和 baseQueue 进行合并操作
 			// baseQueue -> b2 -> b0 -> b1 -> b2
@@ -359,7 +404,9 @@ function updateState<State>(): [State, Dispatch<State>] {
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
 }
 
-// update 阶段复用 current 树中对应的 Hook
+/**
+ * update 阶段复用 current 树中对应的 Hook
+ */
 function updateWorkInProgressHook(): Hook {
 	// TODO render 阶段触发的更新
 	// 存放 currentHook 的下一个 Hook 对象
@@ -415,7 +462,11 @@ function updateWorkInProgressHook(): Hook {
 	return workInProgressHook;
 }
 
-// mount 阶段 useState 对应的 Dispatch
+/**
+ * mount 阶段 useState 对应的 Dispatch
+ * @template State
+ * @param initialState {State | (() => State)} 初始值
+ */
 function mountState<State>(
 	initialState: (() => State) | State
 ): [State, Dispatch<State>] {
@@ -445,7 +496,13 @@ function mountState<State>(
 	return [memoizedState, dispatch];
 }
 
-// 为 Hook 创建 update 对象，并将其放进 Hook 实例对象中的 updateQueue 属性上
+/**
+ * 为 Hook 创建 update 对象，并将其放进 Hook 实例对象中的 updateQueue 属性上
+ * @template State
+ * @param fiber {FiberNode} 当前正在 mount/update 的 fiber
+ * @param updateQueue {UpdateQueue<State>} Hook 实例对象中的 updateQueue 属性
+ * @param action {Action<State>} 更新的 action
+ */
 function dispatchSetState<State>(
 	fiber: FiberNode,
 	updateQueue: UpdateQueue<State>,
@@ -460,7 +517,9 @@ function dispatchSetState<State>(
 	scheduleUpdateOnFiber(fiber, lane);
 }
 
-// 在 mount 阶段创建 Hook 对象并形成 Hook 链表
+/**
+ * mount 阶段创建 Hook 对象并形成 Hook 链表
+ */
 function mountWorkInProgressHook(): Hook {
 	// 构建一个 hook 实例对象
 	const hook: Hook = {

@@ -8,7 +8,11 @@ export type Container = Element;
 export type Instance = Element;
 export type TextInstance = Text;
 
-// export const createInstance = (type: string, props: any): Instance => {
+/**
+ * 创建 DOM 节点
+ * @param type {string} DOM 节点类型
+ * @param props {Props} DOM 节点属性
+ */
 export const createInstance = (type: string, props: Props): Instance => {
 	// TODO 处理 props
 	const element = document.createElement(type) as unknown;
@@ -16,6 +20,11 @@ export const createInstance = (type: string, props: Props): Instance => {
 	return element as DOMElement;
 };
 
+/**
+ * 将 child 节点插入到 parent 节点中
+ * @param parent {Instance | Container} 父节点
+ * @param child {Instance} 子节点
+ */
 export const appendInitialChild = (
 	parent: Instance | Container,
 	child: Instance
@@ -23,13 +32,20 @@ export const appendInitialChild = (
 	parent.appendChild(child);
 };
 
+/**
+ * 创建 Text 节点
+ * @param content {string} Text 节点内容
+ */
 export const createTextInstance = (content: string) => {
 	return document.createTextNode(content);
 };
 
 export const appendChildToContainer = appendInitialChild;
 
-// 提交 Update 操作
+/**
+ * 提交 Update 操作
+ * @param fiber {FiberNode} Fiber 节点
+ */
 export function commitUpdate(fiber: FiberNode) {
 	switch (fiber.tag) {
 		case HostText:
@@ -47,12 +63,20 @@ export function commitUpdate(fiber: FiberNode) {
 	}
 }
 
-// 实际对 Text 进行 Update 操作
+/**
+ * 提交 Text 节点的 Update 操作
+ * @param textInstance {TextInstance} Text 节点实例对象
+ * @param content {string} Text 节点内容
+ */
 export function commitTextUpdate(textInstance: TextInstance, content: string) {
 	textInstance.textContent = content;
 }
 
-// 移除某个 DOM 节点下的某个 child 节点
+/**
+ * 移除某个 DOM 节点下的某个 child 节点
+ * @param child {Instance | TextInstance} 子节点
+ * @param container {Container} 父节点
+ */
 export function removeChild(
 	child: Instance | TextInstance,
 	container: Container
@@ -60,7 +84,12 @@ export function removeChild(
 	container.removeChild(child);
 }
 
-// 将目标 DOM 插入到容器中某个 DOM 的前面
+/**
+ * 将 child 节点插入到 container 节点中，插入到 before 节点前面
+ * @param child {Instance} 目标子节点
+ * @param container {Container} 父节点
+ * @param before {Instance} 目标子节点的前一个兄弟节点
+ */
 export function insertChildToContainer(
 	child: Instance,
 	container: Container,
@@ -69,7 +98,9 @@ export function insertChildToContainer(
 	container.insertBefore(child, before);
 }
 
-// 根据宿主环境获取支持微任务的形式，用于使用微任务执行调度任务
+/**
+ * 根据宿主环境获取支持微任务的形式，用于使用微任务执行调度任务
+ */
 export const scheduleMicroTask =
 	typeof queueMicrotask === 'function'
 		? queueMicrotask

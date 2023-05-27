@@ -103,7 +103,11 @@ export class FiberRootNode {
 	}
 }
 
-// 根据 current 创建 workInProgress
+/**
+ * 根据 current 创建 workInProgress
+ * @param current {FiberNode} 当前页面上的 DOM 对应的 FiberNode
+ * @param pendingProps {Props} 本次更新的 props
+ */
 export const createWorkInProgress = (
 	current: FiberNode,
 	pendingProps: Props
@@ -134,7 +138,10 @@ export const createWorkInProgress = (
 	return wip;
 };
 
-// 根据 ReactElement 创建 FiberNode
+/**
+ * 根据 ReactElement 创建 FiberNode
+ * @param element {ReactElementType} jsx 函数返回的 ReactElement
+ */
 export function createFiberFromElement(element: ReactElementType): FiberNode {
 	const { type, key, props, ref } = element;
 	// 默认赋值为 FunctionComponent 类型
@@ -154,6 +161,11 @@ export function createFiberFromElement(element: ReactElementType): FiberNode {
 	return fiber;
 }
 
+/**
+ * 根据 Fragment 创建对应的 FiberNode
+ * @param elements {any[]} Fragment 的 children
+ * @param key {Key} Fragment 的 key
+ */
 export function createFiberFromFragment(elements: any[], key: Key): FiberNode {
 	const fiber = new FiberNode(Fragment, elements, key);
 	return fiber;
