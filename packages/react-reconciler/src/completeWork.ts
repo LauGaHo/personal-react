@@ -8,12 +8,14 @@ import {
 import { FiberNode } from './fiber';
 import { NoFlags, Ref, Update } from './fiberFlags';
 import {
+	ContextProvider,
 	Fragment,
 	FunctionComponent,
 	HostComponent,
 	HostRoot,
 	HostText
 } from './workTags';
+import { popProvider } from './fiberContext';
 
 /**
  * 标记 Ref
@@ -94,6 +96,13 @@ export const completeWork = (wip: FiberNode) => {
 		case HostRoot:
 		case FunctionComponent:
 		case Fragment:
+			bubbleProperties(wip);
+			return null;
+
+		case ContextProvider:
+			const context = wip.type._context;
+			// Context 实例对象弹出对应 value，并把对应的 value 赋值给 context._currentValue
+			popProvider(context);
 			bubbleProperties(wip);
 			return null;
 

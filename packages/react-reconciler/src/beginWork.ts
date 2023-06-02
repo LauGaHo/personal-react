@@ -7,6 +7,7 @@ import { renderWithHooks } from './fiberHooks';
 import { Lane } from './fiberLanes';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
 import {
+	ContextProvider,
 	Fragment,
 	FunctionComponent,
 	HostComponent,
@@ -14,6 +15,7 @@ import {
 	HostText
 } from './workTags';
 import { Ref } from './fiberFlags';
+import { pushProvider } from './fiberContext';
 
 /**
  * fiber tree 中的 render 阶段的开始的递阶段
@@ -38,6 +40,9 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 		case Fragment:
 			return updateFragment(wip);
 
+		case ContextProvider:
+			return updateContextProvider(wip);
+
 		default:
 			if (__DEV__) {
 				console.warn('beginWork为实现的类型');
@@ -46,6 +51,42 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	}
 	return null;
 };
+
+/**
+ * 针对 Context.Provider 类型 Fiber 节点的 update 操作
+ * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
+ */
+function updateContextProvider(wip: FiberNode) {
+	// 这里的 providerType 其实就是 ReactProviderType 实例对象
+	// {
+	// 	$$typeof: REACT_PROVIDER_TYPE,
+	// 	_context: context
+	// }
+	const providerType = wip.type;
+	const context = providerType._context;
+	const oldProps = wip.memoizedProps;
+	const newProps = wip.pendingProps;
+	const newValue = newProps.value;
+
+	if (__DEV__ && !('value' in newProps)) {
+		console.warn('<Context Provider> 缺少 value 属性');
+	}
+
+	// 如果 context 中的 value 值发生了变化
+	if (newValue !== oldProps.value) {
+		// TODO
+		// 从 Provider 往下进行 DFS，寻找当前变化的 context 的 Consumer
+		// 如果找到 consumer，从 consumer 向上遍历到 Provider
+		// 标记沿途组件存在更新
+	}
+
+	// Context 入栈
+	pushProvider(context, newValue);
+
+	const nextChildren = newProps.children;
+	reconcileChildren(wip, nextChildren);
+	return wip.child;
+}
 
 /**
  * 针对 Fragment 类型 Fiber 节点的 update 操作

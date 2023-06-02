@@ -1,7 +1,7 @@
 import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
 import currentBatchConfig from 'react/src/currentBatchConfig';
 import internals from 'shared/internals';
-import { Action } from 'shared/ReactTypes';
+import { Action, ReactContext } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
 import { Flags, PassiveEffect } from './fiberFlags';
 import { Lane, NoLane, requestUpdateLane } from './fiberLanes';
@@ -106,7 +106,8 @@ const HooksDispatcherOnMount: Dispatcher = {
 	useState: mountState,
 	useEffect: mountEffect,
 	useTransition: mountTransition,
-	useRef: mountRef
+	useRef: mountRef,
+	useContext: readContext
 };
 
 // update 阶段对应的 HookDispatcher
@@ -114,7 +115,8 @@ const HookDispatcherOnUpdate: Dispatcher = {
 	useState: updateState,
 	useEffect: updateEffect,
 	useTransition: updateTransition,
-	useRef: updateRef
+	useRef: updateRef,
+	useContext: readContext
 };
 
 /**
@@ -547,4 +549,20 @@ function mountWorkInProgressHook(): Hook {
 	}
 	// 返回最新的 Hook 实例对象
 	return workInProgressHook;
+}
+
+/**
+ * useContext Hook 实际上调用的就是这个函数，mount 阶段和 update 阶段都会调用
+ * 作用：读取 context 的 value 值并返回
+ * @param context {ReactContext<T>} context 对象
+ * @template T
+ */
+function readContext<T>(context: ReactContext<T>) {
+	const consumer = currentlyRenderingFiber;
+	// consumer 为空说明不是在函数组件内调用 useContext
+	if (consumer === null) {
+		throw new Error('请在函数组件内调用 useContext');
+	}
+	const value = context._currentValue;
+	return value;
 }
