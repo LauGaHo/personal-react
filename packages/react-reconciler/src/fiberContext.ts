@@ -1,7 +1,9 @@
 import { ReactContext } from 'shared/ReactTypes';
 
+// 記錄上一個 Context 的 value 值
+let prevContextValue: any = null;
 // 定义一个 value 栈
-const valueStack: any[] = [];
+const prevContextValueStack: any[] = [];
 
 /**
  * render 阶段中 '递' 的过程中，会将 Context.Provider 的 value 值 push 到 valueStack 中
@@ -10,7 +12,11 @@ const valueStack: any[] = [];
  * @template T
  */
 export function pushProvider<T>(context: ReactContext<T>, newValue: T) {
-	valueStack.push(newValue);
+	// 將上一個 context 的 value 值 push 到 prevContextValueStack 中
+	prevContextValueStack.push(prevContextValue);
+	// 將當前 context 的 value 值賦值給 preContextValue 變量
+	prevContextValue = context._currentValue;
+	// 將 context._currentValue 更新為 newValue
 	context._currentValue = newValue;
 }
 
@@ -20,10 +26,8 @@ export function pushProvider<T>(context: ReactContext<T>, newValue: T) {
  * @template T
  */
 export function popProvider<T>(context: ReactContext<T>) {
-	// 从栈中 pop 出最新的 value
-	const currentValue = valueStack[valueStack.length - 1];
-	// 将最新的 value 赋值到 context._currentValue 属性中
-	context._currentValue = currentValue;
-	// 将最新的 value 从栈中 pop 弹出
-	valueStack.pop();
+	// 將上一個 context 的 value 賦值到當前 context 中的 _currentValue 變量中
+	context._currentValue = prevContextValue;
+	// 将最新的 value 从栈中 pop 弹出，並賦值為 prevContextValue 變量
+	prevContextValue = prevContextValueStack.pop();
 }
