@@ -255,6 +255,20 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		return firstNewFiber;
 	}
 
+	function getElementKeyToUse(element: any, index?: number): Key {
+		if (
+			Array.isArray(element) ||
+			typeof element === 'string' ||
+			typeof element === 'number' ||
+			element === undefined ||
+			element === null
+		) {
+			return index;
+		}
+
+		return element.key !== null ? element.key : index;
+	}
+
 	/**
 	 * 在对 Array 的 ReactElement 进行遍历时，会通过观察其 child 是否在 existingChildren 这个 Map 中从而判断是否可以复用
 	 * @param returnFiber {FiberNode} 目标节点的父节点
@@ -269,7 +283,7 @@ function ChildReconciler(shouldTrackEffects: boolean) {
 		element: any
 	): FiberNode | null {
 		// 获取 element 的 key
-		const keyToUse = element.key !== null ? element.key : index;
+		const keyToUse = getElementKeyToUse(element, index);
 		const before = existingChildren.get(keyToUse);
 
 		// HostText

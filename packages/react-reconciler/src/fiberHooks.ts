@@ -557,7 +557,7 @@ function mountWorkInProgressHook(): Hook {
  * @param context {ReactContext<T>} context 对象
  * @template T
  */
-function readContext<T>(context: ReactContext<T>) {
+function readContext<T>(context: ReactContext<T>): T {
 	const consumer = currentlyRenderingFiber;
 	// consumer 为空说明不是在函数组件内调用 useContext
 	if (consumer === null) {

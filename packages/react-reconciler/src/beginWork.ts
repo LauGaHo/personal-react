@@ -64,24 +64,10 @@ function updateContextProvider(wip: FiberNode) {
 	// }
 	const providerType = wip.type;
 	const context = providerType._context;
-	const oldProps = wip.memoizedProps;
 	const newProps = wip.pendingProps;
-	const newValue = newProps.value;
-
-	if (__DEV__ && !('value' in newProps)) {
-		console.warn('<Context Provider> 缺少 value 属性');
-	}
-
-	// 如果 context 中的 value 值发生了变化
-	if (newValue !== oldProps.value) {
-		// TODO
-		// 从 Provider 往下进行 DFS，寻找当前变化的 context 的 Consumer
-		// 如果找到 consumer，从 consumer 向上遍历到 Provider
-		// 标记沿途组件存在更新
-	}
 
 	// Context 入栈
-	pushProvider(context, newValue);
+	pushProvider(context, newProps.value);
 
 	const nextChildren = newProps.children;
 	reconcileChildren(wip, nextChildren);
