@@ -19,6 +19,7 @@ importers:
       '@typescript-eslint/parser': ^5.48.0
       '@vitejs/plugin-react': ^2.2.0
       commitlint: ^17.4.0
+      esbuild-darwin-arm64: ^0.15.18
       eslint: ^8.31.0
       eslint-config-prettier: ^8.6.0
       eslint-plugin-prettier: ^4.2.1
@@ -53,6 +54,7 @@ importers:
       '@typescript-eslint/parser': 5.48.0_iukboom6ndih5an6iafl45j2fe
       '@vitejs/plugin-react': 2.2.0_vite@3.2.5
       commitlint: 17.4.0
+      esbuild-darwin-arm64: 0.15.18
       eslint: 8.31.0
       eslint-config-prettier: 8.6.0_eslint@8.31.0
       eslint-plugin-prettier: 4.2.1_32m5uc2milwdw3tnkcq5del26y
@@ -2931,7 +2933,6 @@ packages:
     os: [darwin]
     requiresBuild: true
     dev: true
-    optional: true
 
   /esbuild-freebsd-64/0.15.18:
     resolution: {integrity: sha512-TT3uBUxkteAjR1QbsmvSsjpKjOX6UkCstr8nMr+q7zi3NuZ1oIpa8U41Y8I8dJH2fJgdC3Dj3CXO5biLQpfdZA==}
