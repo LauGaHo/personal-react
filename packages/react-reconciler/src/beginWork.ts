@@ -2,7 +2,13 @@
 
 import { ReactElementType } from 'shared/ReactTypes';
 import { mountChildFibers, reconcileChildFibers } from './childFibers';
-import { FiberNode } from './fiber';
+import {
+	createFiberFromFragment,
+	createFiberFromOffscreen,
+	createWorkInProgress,
+	FiberNode,
+	OffscreentProps
+} from './fiber';
 import { renderWithHooks } from './fiberHooks';
 import { Lane } from './fiberLanes';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
@@ -12,9 +18,11 @@ import {
 	FunctionComponent,
 	HostComponent,
 	HostRoot,
-	HostText
+	HostText,
+	OffscreenComponent,
+	SuspenseComponent
 } from './workTags';
-import { Ref } from './fiberFlags';
+import { ChildDeletion, Placement, Ref } from './fiberFlags';
 import { pushProvider } from './fiberContext';
 
 /**
@@ -43,6 +51,12 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 		case ContextProvider:
 			return updateContextProvider(wip);
 
+		case SuspenseComponent:
+			return updateSuspenseComponent(wip);
+
+		case OffscreenComponent:
+			return updateOffscreenComponent(wip);
+
 		default:
 			if (__DEV__) {
 				console.warn('beginWork为实现的类型');
@@ -51,6 +65,211 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	}
 	return null;
 };
+
+/**
+ * 針對 Suspense 類型組件的 update 操作
+ *
+ * @param {FiberNode} wip - 當前工作單元
+ * @returns {FiberNode} 返回當前工作單元的子節點
+ */
+function updateSuspenseComponent(wip: FiberNode) {
+	const current = wip.alternate;
+	const nextProps = wip.pendingProps;
+
+	// 變量，表示是否需要展示 fallback
+	let showFallback = false;
+	// 變量，表示是否掛起
+	const didSuspend = true;
+
+	if (didSuspend) {
+		// 掛起時，showFallback 應為 true
+		showFallback = true;
+	}
+
+	const nextPrimaryChildren = nextProps.children;
+	const nextFallbackChildren = nextProps.fallback;
+
+	if (current === null) {
+		// mount
+		if (showFallback) {
+			// 掛起
+			return mountSuspenseFallbackChildren(
+				wip,
+				nextPrimaryChildren,
+				nextFallbackChildren
+			);
+		} else {
+			// 正常
+			return mountSuspensePrimaryChildren(wip, nextPrimaryChildren);
+		}
+	} else {
+		// update
+		if (showFallback) {
+			// 掛起
+			return updateSuspenseFallbackChildren(
+				wip,
+				nextPrimaryChildren,
+				nextFallbackChildren
+			);
+		} else {
+			// 正常
+			return updateSuspensePrimaryChildren(wip, nextPrimaryChildren);
+		}
+	}
+}
+
+/**
+ * 針對 Suspense 組件下的 primary 組件的 update 階段的操作
+ *
+ * @param {FiberNode} wip - Suspense 組件對應的 FiberNode 實例對象
+ * @param {any} primaryChildren - Suspense 組件下的 primary 組件的 ReactElementType
+ * @returns {FiberNode} 返回 Suspense 組件下的 primary 組件對應的 FiberNode 實例對象
+ */
+function updateSuspensePrimaryChildren(wip: FiberNode, primaryChildren: any) {
+	const current = wip.alternate as FiberNode;
+	const currentPrimaryChildFragment = current.child as FiberNode;
+	const currentFallbackChildFragment: FiberNode | null =
+		currentPrimaryChildFragment;
+
+	const primaryChildProps: OffscreentProps = {
+		mode: 'visible',
+		children: primaryChildren
+	};
+
+	const primaryChildFragment = createWorkInProgress(
+		currentPrimaryChildFragment,
+		primaryChildProps
+	);
+
+	primaryChildFragment.return = wip;
+	primaryChildFragment.sidling = null;
+	wip.child = primaryChildFragment;
+
+	if (currentFallbackChildFragment !== null) {
+		const deletions = wip.deletions;
+		if (deletions === null) {
+			wip.deletions = [currentFallbackChildFragment];
+			wip.flags |= ChildDeletion;
+		} else {
+			deletions.push(currentFallbackChildFragment);
+		}
+	}
+
+	return primaryChildFragment;
+}
+
+/**
+ * 針對 Suspense 組件下的 fallback 組件在 update 階段的操作
+ *
+ * @param {FiberNode} wip - Suspense 組件的 FiberNode
+ * @param {any} primaryChildren - Suspense 組件下的 primary 對應的 ReactElementType
+ * @param {any} fallbackChildren - Suspense 組件下的 fallback 對應的 ReactElementType
+ * @returns {FiberNode} 返回 Suspense 組件下的 fallback 組件對應的 FiberNode 實例對象
+ */
+function updateSuspenseFallbackChildren(
+	wip: FiberNode,
+	primaryChildren: any,
+	fallbackChildren: any
+) {
+	const current = wip.alternate as FiberNode;
+	const currentPrimaryChildFragment = current.child as FiberNode;
+	const currentFallbackChildFragment: FiberNode | null =
+		currentPrimaryChildFragment.sidling;
+
+	const primaryChildProps: OffscreentProps = {
+		mode: 'hidden',
+		children: primaryChildren
+	};
+
+	const primaryChildFragment = createWorkInProgress(
+		currentPrimaryChildFragment,
+		primaryChildProps
+	);
+	let fallbackChildFragment;
+
+	if (currentFallbackChildFragment !== null) {
+		fallbackChildFragment = createWorkInProgress(
+			currentFallbackChildFragment,
+			fallbackChildren
+		);
+	} else {
+		fallbackChildFragment = createFiberFromFragment(fallbackChildren, null);
+		fallbackChildFragment.flags |= Placement;
+	}
+
+	fallbackChildFragment.return = wip;
+	primaryChildFragment.return = wip;
+	primaryChildFragment.sidling = fallbackChildFragment;
+	wip.child = primaryChildFragment;
+
+	return fallbackChildFragment;
+}
+
+/**
+ * 針對 Suspense 組件中的 primary 組件 mount 階段的操作
+ *
+ * @param {FiberNode} wip - Suspense 組件的 Fiber 節點
+ * @param {any} primaryChildren - Suspense 組件下的 primary 組件的信息，一般是 ReactElementType 類型
+ * @returns {FiberNode} 返回 primary 組件對應的 FiberNode 實例對象
+ */
+function mountSuspensePrimaryChildren(wip: FiberNode, primaryChildren: any) {
+	const primaryChildProps: OffscreentProps = {
+		mode: 'visible',
+		children: primaryChildren
+	};
+
+	const primaryChildFragment = createFiberFromOffscreen(primaryChildProps);
+	wip.child = primaryChildFragment;
+	primaryChildFragment.return = wip;
+	return primaryChildFragment;
+}
+
+/**
+ * 針對 Suspense 中的 fallback 組件的 mount 階段的操作
+ *
+ * @param {FiberNode} wip - Suspense 組件的 Fiber 節點
+ * @param {any} primaryChildren - Suspense 組件下的 primary 組件的信息，一般是 ReactElementType 類型
+ * @param {any} fallbackChildren - Suspense 組件下的 fallback 組件的信息，一般是 ReactElementType 類型
+ * @returns {FiberNode} 返回 fallback 組件對應的 FiberNode 實例對象
+ */
+function mountSuspenseFallbackChildren(
+	wip: FiberNode,
+	primaryChildren: any,
+	fallbackChildren: any
+) {
+	const primaryChildProps: OffscreentProps = {
+		mode: 'hidden',
+		children: primaryChildren
+	};
+
+	const primaryChildFragment = createFiberFromOffscreen(primaryChildProps);
+	const fallbackChildFragment = createFiberFromFragment(fallbackChildren, null);
+
+	// 由於 fallbackChildren 處於 mount 階段的時候，整個組件樹其實是處在了 update 階段，所以此時 shouldTrackEffects 為 false，且 alternate 也不為 null
+	// 所以此時需要手動標記一下 flags 為 Placement
+	// 注意：只有在整個組件樹為 mount 階段的時候，shouldTrackEffects 才會為 true，且 alternate 為 null
+	fallbackChildFragment.flags |= Placement;
+
+	primaryChildFragment.return = wip;
+	fallbackChildFragment.return = wip;
+	primaryChildFragment.sidling = fallbackChildFragment;
+	wip.child = primaryChildFragment;
+
+	return fallbackChildFragment;
+}
+
+/**
+ * 針對 OffscreenComponent 類型的 Fiber 節點的 update 操作
+ *
+ * @param {FiberNode} wip - 當前工作單元
+ * @returns {FiberNode} 返回當前工作單元的子 Fiber 節點
+ */
+function updateOffscreenComponent(wip: FiberNode) {
+	const nextProps = wip.pendingProps;
+	const nextChildren = nextProps.children;
+	reconcileChildren(wip, nextChildren);
+	return wip.child;
+}
 
 /**
  * 针对 Context.Provider 类型 Fiber 节点的 update 操作
