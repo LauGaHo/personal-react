@@ -107,3 +107,42 @@ export const scheduleMicroTask =
 		: typeof Promise === 'function'
 		? (callback: (...args: any) => void) => Promise.resolve(null).then(callback)
 		: setTimeout;
+
+/**
+ * 隱藏 HostComponent 邏輯
+ *
+ * @param {Instance} instance - 被隱藏的對象
+ */
+export function hideInstance(instance: Instance) {
+	const style = (instance as HTMLElement).style;
+	style.setProperty('display', 'none', 'important');
+}
+
+/**
+ * 顯示 HostComponent 邏輯
+ *
+ * @param {Instance} instance - 顯示對象
+ */
+export function unHideInstance(instance: Instance) {
+	const style = (instance as HTMLElement).style;
+	style.display = '';
+}
+
+/**
+ * 隱藏 HostText 邏輯
+ *
+ * @param {Instance} textInstance - 隱藏對象
+ */
+export function hideTextInstance(textInstance: Instance) {
+	textInstance.nodeValue = '';
+}
+
+/**
+ * 顯示 HostText 邏輯
+ *
+ * @param {Instance} textInstance - 顯示對象
+ * @param {string} text - 文本內容
+ */
+export function unHideTextInstance(textInstance: Instance, text: string) {
+	textInstance.nodeValue = text;
+}

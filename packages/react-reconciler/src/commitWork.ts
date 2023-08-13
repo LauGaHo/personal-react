@@ -2,9 +2,13 @@ import {
 	appendChildToContainer,
 	commitUpdate,
 	Container,
+	hideInstance,
+	hideTextInstance,
 	insertChildToContainer,
 	Instance,
-	removeChild
+	removeChild,
+	unHideInstance,
+	unHideTextInstance
 } from 'hostConfig';
 import { FiberNode, FiberRootNode, PendingPassiveEffects } from './fiber';
 import {
@@ -17,14 +21,16 @@ import {
 	PassiveMask,
 	Placement,
 	Ref,
-	Update
+	Update,
+	Visibility
 } from './fiberFlags';
 import { Effect, FCUpdateQueue } from './fiberHooks';
 import {
 	FunctionComponent,
 	HostComponent,
 	HostRoot,
-	HostText
+	HostText,
+	OffscreenComponent
 } from './workTags';
 import { HookHasEffect } from './hookEffectTags';
 
@@ -114,7 +120,102 @@ const commitMutationEffectsOnFiber = (
 		// 解绑旧的 ref 绑定
 		safelyDetachRef(finishedWork);
 	}
+	if ((flags & Visibility) !== NoFlags && tag === OffscreenComponent) {
+		const isHidden = finishedWork.pendingProps.mode === 'hidden';
+		hideOrUnhideAllChildren(finishedWork, isHidden);
+		finishedWork.flags &= ~Visibility;
+	}
 };
+
+/**
+ * 處理 OffscreenComponent 類型組件，顯示或隱藏 OffscreenComponent
+ *
+ * @param {FiberNode} finishedWork - 當前正在處理的 FiberNode 節點
+ * @param {boolean} isHidden - 顯示或隱藏
+ */
+function hideOrUnhideAllChildren(finishedWork: FiberNode, isHidden: boolean) {
+	// 找到每一個子節點的頂層 Host 節點
+	findHostSubtreeRoot(finishedWork, (hostRoot: FiberNode) => {
+		const instance = hostRoot.stateNode;
+		if (hostRoot.tag === HostComponent) {
+			isHidden ? hideInstance(instance) : unHideInstance(instance);
+		} else if (hostRoot.tag === HostText) {
+			isHidden
+				? hideTextInstance(instance)
+				: unHideTextInstance(instance, hostRoot.memoizedProps.content);
+		}
+	});
+}
+
+/**
+ * 查找子節點的頂層 Host 節點
+ *
+ * @param {FiberNode} finishedWork - 當前正在處理的 FiberNode 節點
+ * @param {(hostSubtreeRoot: FiberNode) => void} callback - 找到了之後的回調處理函數
+ */
+function findHostSubtreeRoot(
+	finishedWork: FiberNode,
+	callback: (hostSubtreeRoot: FiberNode) => void
+) {
+	let node = finishedWork;
+	let hostSubtreeRoot = null;
+
+	// 總的來說就是一個深度優先遍歷
+	// 一直從子節點下邊找
+	while (node.child) {
+		if (node.tag === HostComponent) {
+			if (hostSubtreeRoot === null) {
+				hostSubtreeRoot = node;
+				callback(node);
+			}
+		} else if (node.tag === HostText) {
+			if (hostSubtreeRoot === null) {
+				callback(node);
+			}
+		} else if (
+			node.tag === OffscreenComponent &&
+			node.pendingProps.mode === 'hidden' &&
+			node !== finishedWork
+		) {
+			// Suspense 組件中嵌套了一個 Suspense 組件
+			// do nothing
+		} else if (node.child !== null) {
+			// 如果子節點不為空
+			node.child.return = node;
+			node = node.child;
+			continue;
+		}
+
+		// 向上找的過程中，找到了 finishedWork 了，直接返回
+		if (node === finishedWork) {
+			return;
+		}
+
+		// 來到這裡表示：node 的 child 為空，sibling 也為空，所以開始向上找 return 了
+		while (node.sidling === null) {
+			if (node.return == null || node.return === finishedWork) {
+				return;
+			}
+
+			// 當一顆子樹遍歷完了之後，需要往上遍歷的時候，可以進行一個判斷，如果此時 hostSubtreeRoot 不為空，則將其重置
+			// 重置是因為子樹已經遍歷完了
+			if (hostSubtreeRoot === node) {
+				hostSubtreeRoot = null;
+			}
+
+			node = node.return;
+		}
+
+		// 當子樹遍歷完了，需要離開這個子樹，到另外的一個 sibling 的時候，如果 hostSubtreeRoot 不為空，則將其重置
+		if (hostSubtreeRoot === node) {
+			hostSubtreeRoot = null;
+		}
+
+		// 當來到這裡的時候，就是 node 的 child 為空，所以開始遍歷 node 的 sibling 了
+		node.sidling.return = node.return;
+		node = node.sidling;
+	}
+}
 
 /**
  * 移除 Ref 绑定

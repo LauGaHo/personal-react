@@ -8,8 +8,11 @@ export const ChildDeletion = 0b0000100;
 export const PassiveEffect = 0b0001000;
 export const Ref = 0b0010000;
 
+// 針對 SuspenseComponent 的 Flags
+export const Visibility = 0b0100000;
 // Commit 阶段中的 Mutation 子阶段需要执行的工作
-export const MutationMask = Placement | Update | ChildDeletion | Ref;
+export const MutationMask =
+	Placement | Update | ChildDeletion | Ref | Visibility;
 // Commit 阶段中的 Layout 子阶段需要执行的工作
 export const LayoutMask = Ref;
 
