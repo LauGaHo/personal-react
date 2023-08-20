@@ -1,7 +1,7 @@
 import { Dispatcher, Dispatch } from 'react/src/currentDispatcher';
 import currentBatchConfig from 'react/src/currentBatchConfig';
 import internals from 'shared/internals';
-import { Action, ReactContext } from 'shared/ReactTypes';
+import { Action, ReactContext, Thenable, Usable } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
 import { Flags, PassiveEffect } from './fiberFlags';
 import { Lane, NoLane, requestUpdateLane } from './fiberLanes';
@@ -15,6 +15,8 @@ import {
 	UpdateQueue
 } from './updateQueue';
 import { scheduleUpdateOnFiber } from './workLoop';
+import { REACT_CONTEXT_TYPE } from 'shared/ReactSymbols';
+import { trackUsedThenable } from './thenable';
 
 // 当前正在 render 的 fiberNode
 let currentlyRenderingFiber: FiberNode | null = null;
@@ -107,7 +109,8 @@ const HooksDispatcherOnMount: Dispatcher = {
 	useEffect: mountEffect,
 	useTransition: mountTransition,
 	useRef: mountRef,
-	useContext: readContext
+	useContext: readContext,
+	use
 };
 
 // update 阶段对应的 HookDispatcher
@@ -116,7 +119,8 @@ const HookDispatcherOnUpdate: Dispatcher = {
 	useEffect: updateEffect,
 	useTransition: updateTransition,
 	useRef: updateRef,
-	useContext: readContext
+	useContext: readContext,
+	use
 };
 
 /**
@@ -565,4 +569,26 @@ function readContext<T>(context: ReactContext<T>): T {
 	}
 	const value = context._currentValue;
 	return value;
+}
+
+/**
+ * use Hook 具體處理邏輯
+ *
+ * @template T - 泛型 T
+ * @param {Usable<T>} usable - 對應的 Promise 實例對象
+ * @throws {Error} - use Hook 不支持參數
+ * @returns {T} 返回 Thenable 實例對象
+ */
+function use<T>(usable: Usable<T>): T {
+	if (usable !== null && typeof usable === 'object') {
+		if (typeof (usable as Thenable<T>).then === 'function') {
+			// thenable
+			const thenable = usable as Thenable<T>;
+			return trackUsedThenable(thenable);
+		} else if ((usable as ReactContext<T>).$$typeof === REACT_CONTEXT_TYPE) {
+			const context = usable as ReactContext<T>;
+			return readContext(context);
+		}
+	}
+	throw new Error('不支持的 use 參數：' + usable);
 }

@@ -4,7 +4,7 @@ import { Dispatcher, resolveDispatcher } from './src/currentDispatcher';
 import currentDispatcher from './src/currentDispatcher';
 import currentBatchConfig from './src/currentBatchConfig';
 import { jsx, jsxDEV, isValidElement as isValidElementFn } from './src/jsx';
-import { ReactContext } from 'shared/ReactTypes';
+import { ReactContext, Usable } from 'shared/ReactTypes';
 export {
 	REACT_FRAGMENT_TYPE as Fragment,
 	REACT_SUSPENSE_TYPE as Suspense
@@ -36,6 +36,11 @@ export const useContext: Dispatcher['useContext'] = <T>(
 ) => {
 	const dispatcher = resolveDispatcher();
 	return dispatcher.useContext(context);
+};
+
+export const use: Dispatcher['use'] = <T>(usable: Usable<T>) => {
+	const dispatcher = resolveDispatcher();
+	return dispatcher.use(usable);
 };
 
 // 内部数据共享层
