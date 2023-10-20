@@ -158,11 +158,12 @@ function findHostSubtreeRoot(
 	callback: (hostSubtreeRoot: FiberNode) => void
 ) {
 	let node = finishedWork;
+	// 标识当前子节点是否已经找到了对应的顶层 host 节点
 	let hostSubtreeRoot = null;
 
 	// 總的來說就是一個深度優先遍歷
 	// 一直從子節點下邊找
-	while (node.child) {
+	while (true) {
 		if (node.tag === HostComponent) {
 			if (hostSubtreeRoot === null) {
 				hostSubtreeRoot = node;
@@ -170,6 +171,7 @@ function findHostSubtreeRoot(
 			}
 		} else if (node.tag === HostText) {
 			if (hostSubtreeRoot === null) {
+				// 这里不需要对 hostSubtreeRoot 进行赋值，因为 HostText 是没有子孙节点的
 				callback(node);
 			}
 		} else if (

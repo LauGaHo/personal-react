@@ -582,13 +582,24 @@ function readContext<T>(context: ReactContext<T>): T {
 function use<T>(usable: Usable<T>): T {
 	if (usable !== null && typeof usable === 'object') {
 		if (typeof (usable as Thenable<T>).then === 'function') {
-			// thenable
+			// Thenable
 			const thenable = usable as Thenable<T>;
 			return trackUsedThenable(thenable);
 		} else if ((usable as ReactContext<T>).$$typeof === REACT_CONTEXT_TYPE) {
+			// ReactContext
 			const context = usable as ReactContext<T>;
 			return readContext(context);
 		}
 	}
 	throw new Error('不支持的 use 參數：' + usable);
+}
+
+/**
+ * 重置 Hook 相關的全局變量，unwind 之前
+ *
+ */
+export function resetHooksOnUnwind() {
+	currentlyRenderingFiber = null;
+	currentHook = null;
+	workInProgressHook = null;
 }

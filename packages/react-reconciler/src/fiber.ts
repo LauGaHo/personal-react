@@ -1,4 +1,4 @@
-import { Props, Key, Ref, ReactElementType } from 'shared/ReactTypes';
+import { Props, Key, Ref, ReactElementType, Wakeable } from 'shared/ReactTypes';
 import {
 	ContextProvider,
 	Fragment,
@@ -26,7 +26,7 @@ export class FiberNode {
 	pendingProps: Props;
 	key: Key;
 	stateNode: any;
-	ref: Ref;
+	ref: Ref | null;
 
 	return: FiberNode | null;
 	sidling: FiberNode | null;
@@ -94,6 +94,9 @@ export class FiberRootNode {
 	// 当前正在被 scheduler 调度的任务的优先级
 	callbackPriority: Lane;
 
+	// WeakMap { promise: Set<Lane> }
+	pingCache: WeakMap<Wakeable<any>, Set<Lane>> | null;
+
 	constructor(container: Container, hostRootFiber: FiberNode) {
 		this.container = container;
 		this.current = hostRootFiber;
@@ -109,6 +112,8 @@ export class FiberRootNode {
 			unmount: [],
 			update: []
 		};
+
+		this.pingCache = null;
 	}
 }
 

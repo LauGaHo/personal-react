@@ -18,6 +18,7 @@ import {
 	SuspenseComponent
 } from './workTags';
 import { popProvider } from './fiberContext';
+import { popSuspenseHandler } from './suspenseContext';
 
 /**
  * 标记 Ref
@@ -110,7 +111,9 @@ export const completeWork = (wip: FiberNode) => {
 			return null;
 
 		case SuspenseComponent:
+			popSuspenseHandler();
 			const offscreenFiber = wip.child as FiberNode;
+			// TODO: 这里为什么使用 pendingProps 而不是使用 memoizedProps？？？
 			const isHidden = offscreenFiber.pendingProps.mode === 'hidden';
 			const currentOffscreenFiber = offscreenFiber.alternate;
 
@@ -122,6 +125,7 @@ export const completeWork = (wip: FiberNode) => {
 					bubbleProperties(offscreenFiber);
 				}
 			} else if (isHidden) {
+				// mount 流程，并且是隐藏状态
 				offscreenFiber.flags |= Visibility;
 				bubbleProperties(offscreenFiber);
 			}

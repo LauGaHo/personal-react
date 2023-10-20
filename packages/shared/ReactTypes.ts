@@ -28,6 +28,7 @@ export type ReactContext<T> = {
 
 export type Usable<T> = Thenable<T> | ReactContext<T>;
 
+// Wakeable 和 Thenable 的区别在于：Wakeable 的 then 是负责启动页面的重新 render，Thenable 只是将请求的 value 赋值到对应的 value 字段上
 export interface Wakeable<Result> {
 	then(
 		onFulfiled: () => Result,
@@ -38,7 +39,7 @@ export interface Wakeable<Result> {
 export interface ThenableImpl<T, Result, Err> {
 	then(
 		onFulfiled: (value: T) => Result,
-		onRejected: (error: Error) => Result
+		onRejected: (error: Err) => Result
 	): void | Wakeable<Result>;
 }
 
@@ -64,6 +65,11 @@ export interface RejectedThenable<T, Result, Err>
 	reason: Err;
 }
 
+// 未追踪状态：untracked
+// 等待状态：pending
+// 对应 Promise 的 resolved 状态：fulfilled
+// 对应 Promise 的 rejected 状态：rejected
+// 用户传入一个 Promise 类型，我们内部将其处理为 Thenable 类型，最初传进来的 Promise 是一个未追踪 untracked 状态
 export type Thenable<T, Result = void, Err = any> =
 	| UntrackedThenable<T, Result, Err>
 	| PendingThenable<T, Result, Err>

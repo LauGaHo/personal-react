@@ -33,6 +33,10 @@ import {
 	unstable_cancelCallback
 } from 'scheduler';
 import { HookHasEffect, Passive } from './hookEffectTags';
+import { getSuspenseThenable, SuspenseException } from './thenable';
+import { resetHooksOnUnwind } from './fiberHooks';
+import { throwException } from './fiberThrow';
+import { unwindWork } from './fiberUnwindWork';
 
 let workInProgress: FiberNode | null = null;
 // 记录本次更新的 Lane
@@ -46,7 +50,16 @@ type RootExitStatus = number;
 const RootInComplete = 1;
 // render 阶段完成退出
 const RootCompleted = 2;
-// TODO 执行过程中报错了
+
+type SuspendedReason = typeof NotSuspended | typeof SuspendedOnData;
+// 没挂起
+const NotSuspended = 0;
+// 请求数据的挂起
+const SuspendedOnData = 1;
+// wip 被挂起的原因
+let wipSuspendedReason: SuspendedReason = NotSuspended;
+// 保存抛出的数据
+let wipThrownValue: any = null;
 
 /**
  * render 过程前的刷新程序执行的栈帧
@@ -79,7 +92,7 @@ export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
  * schedule 阶段入口
  * @param root {FiberRootNode} fiber 树的根节点
  */
-function ensureRootIsScheduled(root: FiberRootNode) {
+export function ensureRootIsScheduled(root: FiberRootNode) {
 	// 获取当前最高的优先级
 	const updateLane = getHighestPriorityLane(root.pendingLanes);
 	// 获取上一次任务的回调
@@ -150,7 +163,7 @@ function ensureRootIsScheduled(root: FiberRootNode) {
  * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
  * @param lane {Lane} 优先级
  */
-function markRootUpdated(root: FiberRootNode, lane: Lane) {
+export function markRootUpdated(root: FiberRootNode, lane: Lane) {
 	root.pendingLanes = mergeLanes(root.pendingLanes, lane);
 }
 
@@ -297,13 +310,25 @@ function renderRoot(root: FiberRootNode, lane: Lane, shouldTimeSlice: boolean) {
 
 	do {
 		try {
+			// 判断当前是否处于 Suspense 挂起状态，并且 wip 不为空
+			if (wipSuspendedReason !== NotSuspended && workInProgress !== null) {
+				// 需要进入 unwind 流程
+				// 获取抛出的错误
+				const thrownValue = wipThrownValue;
+				wipSuspendedReason = NotSuspended;
+				// 置空 wipThrownValue
+				wipThrownValue = null;
+				// 進入 unwind 操作
+				throwAndUnwindWorkLoop(root, workInProgress, thrownValue, lane);
+			}
+
 			shouldTimeSlice ? workLoopConcurrent() : workLoopSync();
 			break;
 		} catch (e) {
 			if (__DEV__) {
 				console.warn('workLoop发生错误', e);
 			}
-			workInProgress = null;
+			handleThrow(root, e);
 		}
 	} while (true);
 
@@ -317,8 +342,68 @@ function renderRoot(root: FiberRootNode, lane: Lane, shouldTimeSlice: boolean) {
 	if (!shouldTimeSlice && workInProgress !== null && __DEV__) {
 		console.error(`render 阶段结束时 wip 不应该是 null`);
 	}
-	// TODO 报错的可能性
+	// TODO: 报错的可能性
 	return RootCompleted;
+}
+
+function throwAndUnwindWorkLoop(
+	root: FiberRootNode,
+	unitOfWork: FiberNode,
+	throwValue: any,
+	lane: Lane
+) {
+	// 重置 FunctionComponent 全局變量
+	resetHooksOnUnwind();
+	// 請求返回重新觸發更新
+	// 通过将 thenable 包装成 wakeable，然后绑定对应的 then 回调即可
+	throwException(root, throwValue, lane);
+	// unwind
+	unwindUnitOfWork(unitOfWork);
+}
+
+function unwindUnitOfWork(unitOfWork: FiberNode) {
+	// 抛出错误组件对应的 FiberNode 实例对象
+	let incompleteWork: FiberNode | null = unitOfWork;
+
+	do {
+		const next = unwindWork(incompleteWork);
+
+		// 找到了对应的 Suspense FiberNode
+		if (next !== null) {
+			// next.flags &= HostEffectMask;
+			// 将 wip 赋值为对应的 Suspense FiberNode，然后直接 return 不用执行下边的了
+			// 返回了之后就会继续执行 beginWork 并且 wip 此时就是 Suspense FiberNode
+			workInProgress = next;
+			return;
+		}
+
+		// 来到这里就说明了还没找到，所以继续往上找
+		const returnFiber = incompleteWork.return as FiberNode;
+		if (returnFiber !== null) {
+			// 因為需要重新進行 beginWork，所以先把 deletion 先刪了，清除副作用
+			returnFiber.deletions = null;
+		}
+		incompleteWork = returnFiber;
+		// 这里的 while 条件是一直往上找，知道找到对应的 Suspense FiberNode
+	} while (incompleteWork !== null);
+
+	// 走到了這裡說明，使用了 use Hook，並拋出了 data，但是沒有定義 SuspenseComponent
+	// 找到了 root 了
+	// TODO: something todo but not do right now
+	workInProgress = null;
+}
+
+function handleThrow(root: FiberRootNode, throwValue: any) {
+	// Error Boundary
+
+	// SuspenseException
+	if (throwValue === SuspenseException) {
+		// 这里是需要拿到 thenable
+		throwValue = getSuspenseThenable();
+		wipSuspendedReason = SuspendedOnData;
+	}
+
+	wipThrownValue = throwValue;
 }
 
 /**

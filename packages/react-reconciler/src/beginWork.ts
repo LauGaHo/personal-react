@@ -22,8 +22,15 @@ import {
 	OffscreenComponent,
 	SuspenseComponent
 } from './workTags';
-import { ChildDeletion, Placement, Ref } from './fiberFlags';
+import {
+	ChildDeletion,
+	DidCapture,
+	NoFlags,
+	Placement,
+	Ref
+} from './fiberFlags';
 import { pushProvider } from './fiberContext';
+import { pushSuspenseHandler } from './suspenseContext';
 
 /**
  * fiber tree 中的 render 阶段的开始的递阶段
@@ -72,22 +79,27 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
  * @param {FiberNode} wip - 當前工作單元
  * @returns {FiberNode} 返回當前工作單元的子節點
  */
-function updateSuspenseComponent(wip: FiberNode) {
+function updateSuspenseComponent(wip: FiberNode): FiberNode {
 	const current = wip.alternate;
 	const nextProps = wip.pendingProps;
 
 	// 變量，表示是否需要展示 fallback
 	let showFallback = false;
 	// 變量，表示是否掛起
-	const didSuspend = true;
+	const didSuspend = (wip.flags & DidCapture) !== NoFlags;
 
 	if (didSuspend) {
 		// 掛起時，showFallback 應為 true
 		showFallback = true;
+		wip.flags &= ~DidCapture;
 	}
 
+	// 获取 OffScreen 的 ReactElement
 	const nextPrimaryChildren = nextProps.children;
+	// 获取 Fallback 的 ReactElement
 	const nextFallbackChildren = nextProps.fallback;
+
+	pushSuspenseHandler(wip);
 
 	if (current === null) {
 		// mount
@@ -126,31 +138,40 @@ function updateSuspenseComponent(wip: FiberNode) {
  * @returns {FiberNode} 返回 Suspense 組件下的 primary 組件對應的 FiberNode 實例對象
  */
 function updateSuspensePrimaryChildren(wip: FiberNode, primaryChildren: any) {
+	// 获取 Suspense 在 current 树上的节点
 	const current = wip.alternate as FiberNode;
+	// 获取 Suspense 中的 OffScreen 对应在 current 树上的节点
 	const currentPrimaryChildFragment = current.child as FiberNode;
+	// 获取 Suspense 中的 Fallback 对应在 current 树上的节点，这里可能会有 null 的情况
 	const currentFallbackChildFragment: FiberNode | null =
-		currentPrimaryChildFragment;
+		currentPrimaryChildFragment.sidling;
 
+	// 创建对应的 Props
 	const primaryChildProps: OffscreentProps = {
 		mode: 'visible',
 		children: primaryChildren
 	};
 
+	// 复用 current 树上的节点
 	const primaryChildFragment = createWorkInProgress(
 		currentPrimaryChildFragment,
 		primaryChildProps
 	);
 
 	primaryChildFragment.return = wip;
+	// 这里在 FiberNode 的层面上直接移除了跟 Fallback 的关系
 	primaryChildFragment.sidling = null;
 	wip.child = primaryChildFragment;
 
+	// 因为上边在 FiberNode 中移除了跟 Fallback 的关系，所以这里要操作对应的标记，使得 DOM 可以同步
 	if (currentFallbackChildFragment !== null) {
 		const deletions = wip.deletions;
 		if (deletions === null) {
+			// 没有 deletions 则创建一个新的，并且添加对应的 FiberNode 和 ChildDeletion 的 flag
 			wip.deletions = [currentFallbackChildFragment];
 			wip.flags |= ChildDeletion;
 		} else {
+			// 有 deletions 则添加对应的 FiberNode
 			deletions.push(currentFallbackChildFragment);
 		}
 	}
@@ -171,8 +192,11 @@ function updateSuspenseFallbackChildren(
 	primaryChildren: any,
 	fallbackChildren: any
 ) {
+	// 获取 Suspense FiberNode 的 alternate
 	const current = wip.alternate as FiberNode;
+	// 获取 current.child 也就是说是 Suspense 下的 OffScreen 的 current 树上的节点
 	const currentPrimaryChildFragment = current.child as FiberNode;
+	// 获取 OffScreen 在 current 树上的节点的 sibling，其实就是 current 树上的 Fragment，注意，这里可以为空的
 	const currentFallbackChildFragment: FiberNode | null =
 		currentPrimaryChildFragment.sidling;
 
@@ -187,12 +211,15 @@ function updateSuspenseFallbackChildren(
 	);
 	let fallbackChildFragment;
 
+	// 判断 currentFallbackChildFragment 是否存在
 	if (currentFallbackChildFragment !== null) {
+		// 存在则直接复用
 		fallbackChildFragment = createWorkInProgress(
 			currentFallbackChildFragment,
 			fallbackChildren
 		);
 	} else {
+		// 反之则直接创建一个
 		fallbackChildFragment = createFiberFromFragment(fallbackChildren, null);
 		fallbackChildFragment.flags |= Placement;
 	}
