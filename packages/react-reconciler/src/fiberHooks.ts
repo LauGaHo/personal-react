@@ -4,7 +4,7 @@ import internals from 'shared/internals';
 import { Action, ReactContext, Thenable, Usable } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
 import { Flags, PassiveEffect } from './fiberFlags';
-import { Lane, NoLane, requestUpdateLane } from './fiberLanes';
+import { Lane, mergeLanes, NoLane, requestUpdateLane } from './fiberLanes';
 import { HookHasEffect, Passive } from './hookEffectTags';
 import {
 	createUpdate,
@@ -400,7 +400,12 @@ function updateState<State>(): [State, Dispatch<State>] {
 			memoizedState,
 			baseQueue: newBaseQueue,
 			baseState: newBaseState
-		} = processUpdateQueue(baseState, baseQueue, renderLane);
+		} = processUpdateQueue(baseState, baseQueue, renderLane, (update) => {
+			const skippedLane = update.lane;
+			const fiber = currentlyRenderingFiber as FiberNode;
+			// 此时 fiberNode.lanes 在 beginWork 中被置空了
+			fiber.lanes = mergeLanes(fiber.lanes, skippedLane);
+		});
 		// 并将返回的 memoizedState, baseState, baseQueue 赋值到 hook 对应的变量中
 		hook.memoizedState = memoizedState;
 		hook.baseState = newBaseState;
@@ -518,7 +523,7 @@ function dispatchSetState<State>(
 	// 创建 update 对象
 	const update = createUpdate(action, lane);
 	// 将新创建的 update 对象放到 updateQueue 中
-	enqueueUpdate(updateQueue, update);
+	enqueueUpdate(updateQueue, update, fiber, lane);
 	// 从当前 fiberNode 开始调度更新
 	scheduleUpdateOnFiber(fiber, lane);
 }

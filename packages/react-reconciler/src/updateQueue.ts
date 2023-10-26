@@ -1,6 +1,7 @@
 import { Dispatch } from 'react/src/currentDispatcher';
 import { Action } from 'shared/ReactTypes';
-import { isSubsetOfLanes, Lane, NoLane } from './fiberLanes';
+import { FiberNode } from './fiber';
+import { isSubsetOfLanes, Lane, mergeLanes, NoLane } from './fiberLanes';
 
 // 定义 Update
 export interface Update<State> {
@@ -51,11 +52,15 @@ export const createUpdateQueue = <State>() => {
  * 将 Update 实例对象放进 updateQueue 中
  * @param updateQueue {UpdateQueue<State>} 承载 Update 实例对象的 updateQueue
  * @param update {Update<State>} 需要放进 updateQueue 中的 Update 实例对象
+ * @param fiber {FiberNode} Update 的持有者 fiber
+ * @param lane {Lane} 本次更新 Update 实例对象对应的 Lane 优先级
  * @template State
  */
 export const enqueueUpdate = <State>(
 	updateQueue: UpdateQueue<State>,
-	update: Update<State>
+	update: Update<State>,
+	fiber: FiberNode,
+	lane: Lane
 ) => {
 	const pending = updateQueue.shared.pending;
 	if (pending === null) {
@@ -71,6 +76,14 @@ export const enqueueUpdate = <State>(
 		pending.next = update;
 	}
 	updateQueue.shared.pending = update;
+
+	// 将当前更新的 lane 合并记录到 fiber.lanes 上
+	fiber.lanes = mergeLanes(fiber.lanes, lane);
+	// 同样地，需要将 lane 也记录到 alternate 中，也就是 current 中
+	const alternate = fiber.alternate;
+	if (alternate !== null) {
+		alternate.lanes = mergeLanes(alternate.lanes, lane);
+	}
 };
 
 /**
@@ -80,12 +93,14 @@ export const enqueueUpdate = <State>(
  * @param baseState {State} 初始状态
  * @param pendingUpdate {Update<State> | null} Update 链表中最后一个插入的 Update 对象，也意味着是一个环状链表
  * @param renderLane {Lane} 更新的优先级
+ * @param onSkipUpdate {Function} 可选参数，表示 Update 被跳过后的回调函数
  * @template State
  */
 export const processUpdateQueue = <State>(
 	baseState: State,
 	pendingUpdate: Update<State> | null,
-	renderLane: Lane
+	renderLane: Lane,
+	onSkipUpdate?: <State>(update: Update<State>) => void
 ): {
 	memoizedState: State;
 	baseState: State;
@@ -120,6 +135,10 @@ export const processUpdateQueue = <State>(
 				// 优先级不够，被跳过
 				// clone 为被跳过的 update 实例对象，克隆了一份出来
 				const clone = createUpdate(pending.action, pending.lane);
+
+				// onSkipUpdate 回调不为空，则直接调用
+				onSkipUpdate?.(clone);
+
 				// 判断当前跳过的 update 是否为第一个被跳过的 update
 				if (newBaseQueueFirst === null) {
 					// 说明当前跳过的 update 是第一个被跳过的 update

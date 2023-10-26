@@ -43,6 +43,10 @@ export class FiberNode {
 	updateQueue: unknown;
 	// 存放需要被删除的 FiberNode 子节点
 	deletions: FiberNode[] | null;
+	// 存放当前 FiberNode 节点存在哪些优先级的 Update 未执行
+	lanes: Lanes;
+	// 存放当前 FiberNode 节点的子树存在哪些优先级的 Update 未执行
+	childLanes: Lanes;
 
 	constructor(tag: WorkTag, pendingProps: Props, key: Key) {
 		this.tag = tag;
@@ -71,6 +75,9 @@ export class FiberNode {
 		this.flags = NoFlags;
 		this.subtreeFlags = NoFlags;
 		this.deletions = null;
+
+		this.lanes = NoLanes;
+		this.childLanes = NoLanes;
 	}
 }
 
@@ -157,6 +164,9 @@ export const createWorkInProgress = (
 	wip.memoizedProps = current.memoizedProps;
 	wip.memoizedState = current.memoizedState;
 	wip.ref = current.ref;
+
+	wip.lanes = current.lanes;
+	wip.childLanes = current.childLanes;
 
 	return wip;
 };

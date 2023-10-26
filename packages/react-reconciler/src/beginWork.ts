@@ -10,7 +10,7 @@ import {
 	OffscreentProps
 } from './fiber';
 import { renderWithHooks } from './fiberHooks';
-import { Lane } from './fiberLanes';
+import { Lane, NoLanes } from './fiberLanes';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
 import {
 	ContextProvider,
@@ -38,6 +38,10 @@ import { pushSuspenseHandler } from './suspenseContext';
  * @param renderLane {Lane} 渲染优先级
  */
 export const beginWork = (wip: FiberNode, renderLane: Lane) => {
+	// TODO: bailout 策略
+
+	wip.lanes = NoLanes;
+
 	// 比较，并返回子 fiberNode
 	switch (wip.tag) {
 		case HostRoot:
