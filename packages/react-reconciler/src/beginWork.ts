@@ -358,6 +358,15 @@ function updateHostRoot(wip: FiberNode, renderLane: Lane) {
 	// 将原本的 state 和当前最新的 Update 对象进行比较，得到的结果是 ReactElementType 类型对象
 	// 这里的 memoizedState 相当于 <App/> 的 ReactElementType 对象
 	const { memoizedState } = processUpdateQueue(baseState, pending, renderLane);
+
+	// 这里是防止 use Hook 没有包裹 Suspense 组件导致 fiber 树没有翻转
+	// 可以看 createWorkInProgress 方法中，创建 wip 的逻辑是将 current 的 memoizedState 赋值给 wip 的 memoizedState 变量
+	// 而这里由于 use Hook 的存在会导致 current 和 wip 树没有进行翻转，所以下次的 current 还是这次的 current 所以将需要更新 current 上的 memoizedState 变量
+	const current = wip.alternate;
+	if (current !== null) {
+		current.memoizedState = memoizedState;
+	}
+
 	// 将最新的 memoizedState 赋值给 wip 的 memoizedState 属性中
 	wip.memoizedState = memoizedState;
 

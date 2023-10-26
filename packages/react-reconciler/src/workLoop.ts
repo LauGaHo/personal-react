@@ -16,10 +16,11 @@ import {
 } from './fiber';
 import { MutationMask, NoFlags, PassiveMask } from './fiberFlags';
 import {
-	getHighestPriorityLane,
+	getNextLane,
 	Lane,
 	lanesToSchedulerPriority,
 	markRootFinished,
+	markRootSuspend,
 	mergeLanes,
 	NoLane,
 	SyncLane
@@ -46,10 +47,16 @@ let rootDoesHasPassiveEffects = false;
 
 // 标记 render 退出原因的变量
 type RootExitStatus = number;
+// 工作中的状态
+const RootInProgress = 0;
 // render 中断退出
 const RootInComplete = 1;
 // render 阶段完成退出
 const RootCompleted = 2;
+// 由于挂起，当前是未完成状态，不用进入 commit 阶段
+const RootDidNotComplete = 3;
+// 全局的退出状态
+let wipRootExitStatus = RootInProgress;
 
 type SuspendedReason = typeof NotSuspended | typeof SuspendedOnData;
 // 没挂起
@@ -73,6 +80,12 @@ function prepareFreshStack(root: FiberRootNode, lane: Lane) {
 	workInProgress = createWorkInProgress(root.current, {});
 	// 每次更新前，都记录当前此次更新的优先级
 	wipRootRenderLane = lane;
+	// 为全局退出状态变量赋值为 RootInProgress 标识工作中
+	wipRootExitStatus = RootInProgress;
+	// 为全局变量 wip 被挂起的原因赋值为 NotSuspended 标识没有被挂起
+	wipSuspendedReason = NotSuspended;
+	// 置空 wip 遇到 Suspended 所抛出的数据
+	wipThrownValue = null;
 }
 
 /**
@@ -94,7 +107,7 @@ export function scheduleUpdateOnFiber(fiber: FiberNode, lane: Lane) {
  */
 export function ensureRootIsScheduled(root: FiberRootNode) {
 	// 获取当前最高的优先级
-	const updateLane = getHighestPriorityLane(root.pendingLanes);
+	const updateLane = getNextLane(root);
 	// 获取上一次任务的回调
 	const existingCallback = root.callbackNode;
 	// 如果当前是 NoLane，直接返回
@@ -209,7 +222,7 @@ function performConcurrentWorkOnRoot(
 	}
 
 	// 获取当前 root 节点中最高优先级
-	const lane = getHighestPriorityLane(root.pendingLanes);
+	const lane = getNextLane(root);
 	// 获取当前调度器正在调度的任务
 	const curCallbackNode = root.callbackNode;
 	// 若当前最高的优先级为 NoLane，则直接返回
@@ -224,34 +237,48 @@ function performConcurrentWorkOnRoot(
 	// 1. concurrent 任务被中断了执行
 	// 2. 任务执行完毕
 	// 这里再次执行 ensureRootIsScheduled 一次的作用是：如果实际结果为可能性 1 的话，重新调度一下，看一下有没有产生更高优先级的任务，如果有，则直接返回，如果没有，则直接返回该函数本身
-	ensureRootIsScheduled(root);
+	// 下边的那行代码搬到了 RootDidNotComplete 的 switch 分支上
+	// ensureRootIsScheduled(root);
 
-	// 可能性 1: 任务中断
-	if (exitStatus === RootInComplete) {
-		// 代表有一个更高优先级的任务
-		if (root.callbackNode !== curCallbackNode) {
-			return null;
-		}
-		// 代表还是调度当前正在处理的任务，即同等优先级
-		// 结合着 ensureRootIsScheduled 函数来说，这里算是 scheduler 的一个优化路径
-		return performConcurrentWorkOnRoot.bind(null, root);
-	}
+	switch (exitStatus) {
+		// 因为并发更新打断了
+		case RootInComplete:
+			// 代表有一个更高优先级的任务
+			if (root.callbackNode !== curCallbackNode) {
+				return null;
+			}
+			// 代表还是调度当前正在处理的任务，即同等优先级
+			// 结合着 ensureRootIsScheduled 函数来说，这里算是 scheduler 的一个优化路径
+			return performConcurrentWorkOnRoot.bind(null, root);
 
-	// 可能性 2: 更新完毕
-	if (exitStatus === RootCompleted) {
-		// 获取 render 阶段形成的一棵完整的 fiberNode 树，并赋值给 root.finishedWork 属性中
-		const finishedWork = root.current.alternate;
-		root.finishedWork = finishedWork;
-		// 记录本次消费的 Lane
-		root.finishedLane = lane;
-		// 更新结束之后，重新将 wipRootRenderLane 赋值为 NoLane
-		wipRootRenderLane = NoLane;
+		// render 阶段结束了
+		case RootCompleted:
+			// 获取 render 阶段形成的一棵完整的 fiberNode 树，并赋值给 root.finishedWork 属性中
+			const finishedWork = root.current.alternate;
+			root.finishedWork = finishedWork;
+			// 记录本次消费的 Lane
+			root.finishedLane = lane;
+			// 更新结束之后，重新将 wipRootRenderLane 赋值为 NoLane
+			wipRootRenderLane = NoLane;
 
-		// commit 阶段
-		// 根据 wip fiberNode 树中的 flags 提交给 render
-		commitRoot(root);
-	} else if (__DEV__) {
-		console.error('还未实现的并发更新结束状态');
+			// commit 阶段
+			// 根据 wip fiberNode 树中的 flags 提交给 render
+			commitRoot(root);
+			break;
+
+		// render 阶段没有完成，好比 use Hook 没有被 Suspense 包围
+		case RootDidNotComplete:
+			wipRootRenderLane = NoLane;
+			// 标记当前更新的 Lane 被挂起了
+			markRootSuspend(root, lane);
+			ensureRootIsScheduled(root);
+			break;
+
+		default:
+			if (__DEV__) {
+				console.error('还未实现的并发更新结束状态');
+			}
+			break;
 	}
 }
 
@@ -260,7 +287,7 @@ function performConcurrentWorkOnRoot(
  * @param root {FiberRootNode} FiberRootNode 节点，可以理解为 Fiber 树的根节点
  */
 function performSyncWorkOnRoot(root: FiberRootNode) {
-	const nextLane = getHighestPriorityLane(root.pendingLanes);
+	const nextLane = getNextLane(root);
 
 	if (nextLane !== SyncLane) {
 		// 其他比 SyncLane 低的优先级
@@ -272,21 +299,32 @@ function performSyncWorkOnRoot(root: FiberRootNode) {
 
 	const exitStatus = renderRoot(root, nextLane, false);
 
-	// 任务完成
-	if (exitStatus === RootCompleted) {
-		// 获取 render 阶段形成的一棵完整的 fiberNode 树，并赋值给 root.finishedWork 属性中
-		const finishedWork = root.current.alternate;
-		root.finishedWork = finishedWork;
-		// 记录本次消费的 Lane
-		root.finishedLane = nextLane;
-		// 更新结束之后，重新将 wipRootRenderLane 赋值为 NoLane
-		wipRootRenderLane = NoLane;
+	switch (exitStatus) {
+		case RootCompleted:
+			// 获取 render 阶段形成的一棵完整的 fiberNode 树，并赋值给 root.finishedWork 属性中
+			const finishedWork = root.current.alternate;
+			root.finishedWork = finishedWork;
+			// 记录本次消费的 Lane
+			root.finishedLane = nextLane;
+			// 更新结束之后，重新将 wipRootRenderLane 赋值为 NoLane
+			wipRootRenderLane = NoLane;
 
-		// commit 阶段
-		// 根据 wip fiberNode 树中的 flags 提交给 render
-		commitRoot(root);
-	} else if (__DEV__) {
-		console.error('还未实现的同步更新结束状态');
+			// commit 阶段
+			// 根据 wip fiberNode 树中的 flags 提交给 render
+			commitRoot(root);
+			break;
+
+		case RootDidNotComplete:
+			wipRootRenderLane = NoLane;
+			markRootSuspend(root, nextLane);
+			ensureRootIsScheduled(root);
+			break;
+
+		default:
+			if (__DEV__) {
+				console.log('还未实现的同步更新结束状态');
+			}
+			break;
 	}
 }
 
@@ -331,6 +369,10 @@ function renderRoot(root: FiberRootNode, lane: Lane, shouldTimeSlice: boolean) {
 			handleThrow(root, e);
 		}
 	} while (true);
+
+	if (wipRootExitStatus !== RootInProgress) {
+		return wipRootExitStatus;
+	}
 
 	// 执行到这里有两种可能性
 	// 中断执行 || render 阶段执行完毕
@@ -389,7 +431,8 @@ function unwindUnitOfWork(unitOfWork: FiberNode) {
 
 	// 走到了這裡說明，使用了 use Hook，並拋出了 data，但是沒有定義 SuspenseComponent
 	// 找到了 root 了
-	// TODO: something todo but not do right now
+	// 没找到对应的 Suspense FiberNode，将 wipRootExitStatus 赋值为 RootDidNotComplete 并且置空 workInProgress 变量
+	wipRootExitStatus = RootDidNotComplete;
 	workInProgress = null;
 }
 

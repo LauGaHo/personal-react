@@ -69,7 +69,12 @@ export function isSubsetOfLanes(set: Lanes, subset: Lane) {
  * @param lane {Lane} 需要被移除的优先级
  */
 export function markRootFinished(root: FiberRootNode, lane: Lane) {
+	// 此处需要注意：如果使用了 use Hook 然后没有使用 Suspense 来进行包裹，则页面是会被一直阻塞掉的
+	// 因为期间就算进行 render 过程的话，只要到了 use Hook 对应的组件中就会被中断掉了
 	root.pendingLanes &= ~lane;
+	// 重置 suspendedLanes 和 pingLanes
+	root.suspendedLanes = NoLanes;
+	root.pingLanes = NoLanes;
 }
 
 /**
@@ -113,4 +118,61 @@ export function schedulerPriorityToLane(schedulerPriority: number): Lane {
 	}
 
 	return NoLane;
+}
+
+/**
+ * 标记某个 Lane 的某个更新被挂起了
+ *
+ * @param {FiberRootNode} root - wip 树上对应的 FiberRootNode
+ * @param {Lane} suspendedLane - 被挂起的 Lane
+ */
+export function markRootSuspend(root: FiberRootNode, suspendedLane: Lane) {
+	// 标记挂起的 suspendLane
+	root.suspendedLanes |= suspendedLane;
+	// 从 pendingLanes 中移除 suspendLane
+	root.pendingLanes &= ~suspendedLane;
+}
+
+/**
+ * 标记某个 Lane 被重新激活了
+ *
+ * @param {FiberRootNode} root - wip 树上对应的 FiberRootNode
+ * @param {Lane} pingLane - 被激活的 Lane
+ */
+export function markRootPinged(root: FiberRootNode, pingLane: Lane) {
+	root.pingLanes |= root.suspendedLanes & pingLane;
+}
+
+/**
+ * 排除了 suspendedLanes 之后获取优先级最高的 Lane
+ *
+ * @param {FiberRootNode} root - FiberRootNode 实例对象
+ * @returns {Lane} 当前最高优先级的 Lane
+ */
+export function getNextLane(root: FiberRootNode): Lane {
+	const pendingLanes = root.pendingLanes;
+
+	if (pendingLanes === NoLanes) {
+		return NoLanes;
+	}
+
+	let nextLane = NoLanes;
+
+	// 获取 pendingLanes 中没有被挂起的 Lanes
+	// 这里存在两种情况：
+	// 1. root.suspendedLanes 不为 NoLanes。则 suspendedLanes 为 pendingLanes 的子集
+	// 2. root.suspendedLanes 为 NoLanes。则 suspendedLanes 为 pendingLanes，是等于关系
+	const suspendedLanes = pendingLanes & ~root.suspendedLanes;
+
+	if (suspendedLanes !== NoLanes) {
+		nextLane = getHighestPriorityLane(suspendedLanes);
+	} else {
+		// 所有的 lane 都被挂起了，但是有的 lane 可能已经被 ping 了
+		const pingedLanes = pendingLanes & root.pingLanes;
+		if (pingedLanes !== NoLanes) {
+			nextLane = getHighestPriorityLane(pingedLanes);
+		}
+	}
+
+	return nextLane;
 }
