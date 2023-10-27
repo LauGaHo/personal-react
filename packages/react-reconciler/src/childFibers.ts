@@ -451,3 +451,32 @@ function updateFragment(
 
 export const reconcileChildFibers = ChildReconciler(true);
 export const mountChildFibers = ChildReconciler(false);
+
+/**
+ * 克隆 wip 下的 child
+ *
+ * @param {FiberNode} wip - 被克隆的对象
+ */
+export function cloneChildFibers(wip: FiberNode) {
+	if (wip.child === null) {
+		return;
+	}
+	// 存档一下 current child
+	let currentChild = wip.child;
+
+	// 根据 currentChild 创建一个 newChild，其实就是为 wip 赋值而已
+	let newChild = createWorkInProgress(currentChild, currentChild.pendingProps);
+
+	// 克隆出来的 newChild 就是当前 wip.child 所指向的 child
+	wip.child = newChild;
+	newChild.return = wip;
+
+	while (currentChild.sidling !== null) {
+		currentChild = currentChild.sidling;
+		newChild = newChild.sidling = createWorkInProgress(
+			currentChild,
+			currentChild.pendingProps
+		);
+		newChild.return = wip;
+	}
+}

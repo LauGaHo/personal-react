@@ -176,3 +176,24 @@ export function getNextLane(root: FiberRootNode): Lane {
 
 	return nextLane;
 }
+
+/**
+ * 判断 set 里边的 Lanes 是否存在 subset 中的一个子集
+ *
+ * @param {Lanes} set - 目标 Lanes 集合
+ * @param {Lane | Lanes} subset - 子集 Lane 或 Lanes 集合
+ * @returns {boolean} 返回 boolean 值，为 true 表示有交集，为 false 表示没有交集
+ */
+export function includeSomeLanes(set: Lanes, subset: Lane | Lanes): boolean {
+	return (set & subset) !== NoLanes;
+}
+
+/**
+ * 在一个 lanes 的集合中移除对应的 renderLane
+ *
+ * @param {Lanes} set - lanes 集合
+ * @param {Lanes | Lane} subset - 需要被移除的 lanes 子集
+ */
+export function removeLanes(set: Lanes, subset: Lanes | Lane) {
+	return set & ~subset;
+}

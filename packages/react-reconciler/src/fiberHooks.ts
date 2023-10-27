@@ -4,7 +4,13 @@ import internals from 'shared/internals';
 import { Action, ReactContext, Thenable, Usable } from 'shared/ReactTypes';
 import { FiberNode } from './fiber';
 import { Flags, PassiveEffect } from './fiberFlags';
-import { Lane, mergeLanes, NoLane, requestUpdateLane } from './fiberLanes';
+import {
+	Lane,
+	mergeLanes,
+	NoLane,
+	removeLanes,
+	requestUpdateLane
+} from './fiberLanes';
 import { HookHasEffect, Passive } from './hookEffectTags';
 import {
 	createUpdate,
@@ -17,6 +23,7 @@ import {
 import { scheduleUpdateOnFiber } from './workLoop';
 import { REACT_CONTEXT_TYPE } from 'shared/ReactSymbols';
 import { trackUsedThenable } from './thenable';
+import { markWipReceivedUpdate } from './beginWork';
 
 // 当前正在 render 的 fiberNode
 let currentlyRenderingFiber: FiberNode | null = null;
@@ -395,6 +402,8 @@ function updateState<State>(): [State, Dispatch<State>] {
 
 	// 为了避免 pending 属性为空的时候，无法正确计算 state 的值，所以需要将计算 state 值的代码移出 if (pending !== null) 条件判断
 	if (baseQueue !== null) {
+		// 定义一下之前的值是什么
+		const prevState = hook.memoizedState;
 		// 计算新值
 		const {
 			memoizedState,
@@ -406,6 +415,16 @@ function updateState<State>(): [State, Dispatch<State>] {
 			// 此时 fiberNode.lanes 在 beginWork 中被置空了
 			fiber.lanes = mergeLanes(fiber.lanes, skippedLane);
 		});
+
+		// NaN === NaN return false
+		// Object.is(NaN, NaN) return true
+		// +0 === -0 return false
+		// Object.is(+0, -0) return true
+		if (!Object.is(prevState, memoizedState)) {
+			// 标记不通过 bailout 判断条件，需要更新
+			markWipReceivedUpdate();
+		}
+
 		// 并将返回的 memoizedState, baseState, baseQueue 赋值到 hook 对应的变量中
 		hook.memoizedState = memoizedState;
 		hook.baseState = newBaseState;
@@ -607,4 +626,18 @@ export function resetHooksOnUnwind() {
 	currentlyRenderingFiber = null;
 	currentHook = null;
 	workInProgressHook = null;
+}
+
+/**
+ * FunctionComponent 的 bailout 逻辑
+ *
+ * @param {FiberNode} wip - 当前工作单元
+ * @param {Lane} renderLane - 当前更新的优先级
+ */
+export function bailoutHook(wip: FiberNode, renderLane: Lane) {
+	const current = wip.alternate as FiberNode;
+	wip.updateQueue = current.updateQueue;
+	wip.flags &= ~PassiveEffect;
+
+	current.lanes = removeLanes(current.lanes, renderLane);
 }

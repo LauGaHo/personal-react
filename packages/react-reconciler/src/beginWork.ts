@@ -1,7 +1,11 @@
 // 递归中的递阶段
 
 import { ReactElementType } from 'shared/ReactTypes';
-import { mountChildFibers, reconcileChildFibers } from './childFibers';
+import {
+	cloneChildFibers,
+	mountChildFibers,
+	reconcileChildFibers
+} from './childFibers';
 import {
 	createFiberFromFragment,
 	createFiberFromOffscreen,
@@ -9,8 +13,8 @@ import {
 	FiberNode,
 	OffscreentProps
 } from './fiber';
-import { renderWithHooks } from './fiberHooks';
-import { Lane, NoLanes } from './fiberLanes';
+import { bailoutHook, renderWithHooks } from './fiberHooks';
+import { includeSomeLanes, Lane, NoLanes } from './fiberLanes';
 import { processUpdateQueue, UpdateQueue } from './updateQueue';
 import {
 	ContextProvider,
@@ -32,13 +36,71 @@ import {
 import { pushProvider } from './fiberContext';
 import { pushSuspenseHandler } from './suspenseContext';
 
+// 代表是否可以命中 bailout 优化策略，false 表示命中 bailout；true 表示没有命中 bailout
+let didReceiveUpdate = false;
+
+/**
+ * 标记本次更新没有命中 bailout 逻辑，走 update 逻辑
+ *
+ */
+export function markWipReceivedUpdate() {
+	didReceiveUpdate = true;
+}
+
 /**
  * fiber tree 中的 render 阶段的开始的递阶段
  * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
  * @param renderLane {Lane} 渲染优先级
  */
 export const beginWork = (wip: FiberNode, renderLane: Lane) => {
-	// TODO: bailout 策略
+	// bailout 策略
+	// 每次 beginWork 都需要重置 didReceiveUpdate 为 false
+	didReceiveUpdate = false;
+	const current = wip.alternate;
+
+	if (current !== null) {
+		const oldProps = current.memoizedProps;
+		const newProps = wip.pendingProps;
+
+		// 这里选用四要素的比较来判断 bailout 优化逻辑条件的命中基于以下的点：
+		// 1. type: 对于 FunctionComponent 来说，fiber.type 就是对应的函数
+		// 2. Props: 对于 FunctionComponent 来说，Props 就相当于是函数传入的形参
+		// 3. state: 对于 FunctionComponent 来说，state 就相当于于 useState Hook 中的值，而 state 改变必然伴随着 lanes
+		// 4. context: TODO: 补充对应说明
+
+		// 四要素比较之 Props 比较和 type 比较
+		if (oldProps !== newProps || current.type !== wip.type) {
+			didReceiveUpdate = true;
+		} else {
+			// Props 和 type 都相等，所以接下来比较 state 和 context
+			const hasScheduledStateOrContext = checkScheduledUpdateOrContext(
+				current,
+				renderLane
+			);
+
+			if (!hasScheduledStateOrContext) {
+				// 表示四要素中的 Context 和 state 不变
+				// 此处 hasScheduledStateOrContext 为 false 表示命中了 bailout 优化策略
+				// 命中 bailout
+				didReceiveUpdate = false;
+
+				// 考虑 Context 的入栈和出栈
+				switch (wip.tag) {
+					case ContextProvider:
+						const newValue = wip.memoizedProps.value;
+						const context = wip.type._context;
+						pushProvider(context, newValue);
+						break;
+					// TODO: Suspense
+				}
+
+				// 这里需要进行一下说明，bailoutOnAlreadyFinishedWork 函数中有两个潜在可能的返回值：
+				// 1. null: 返回 null 值时说明了 wip 下的所有子树符合 bailout 优化条件，所以返回 null 直接返回上一级进入 completeWork 流程
+				// 2. FiberNode 实例对象: 说明 wip 下一级的子树满足 bailout 优化条件，所以返回下一级的 FiberNode，从下一级开始 beginWork
+				return bailoutOnAlreadyFinishedWork(wip, renderLane);
+			}
+		}
+	}
 
 	wip.lanes = NoLanes;
 
@@ -76,6 +138,56 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 	}
 	return null;
 };
+
+/**
+ * bailout 具体逻辑，复用上次更新的结果
+ *
+ * @param {FiberNode} wip - 当前工作单元 FiberNode
+ * @param {Lane} renderLane - 当前更新的优先级 renderLane
+ */
+function bailoutOnAlreadyFinishedWork(wip: FiberNode, renderLane: Lane) {
+	// 能进入该函数，证明已经命中了 bailout 的优化策略
+	// 首先先检查一下优化程度
+
+	// 判断子树中的 lanes 也就是 childLanes 中是否包含本次更新的 renderLane
+	if (!includeSomeLanes(wip.childLanes, renderLane)) {
+		// 表示 wip 的子树也满足 bailout 优化策略
+		if (__DEV__) {
+			console.warn('bailout 整棵子树', wip);
+		}
+		// 这里返回 null 的原因表示 wip 下所有的子树都不需要进入 render 过程，所以直接返回 null
+		return null;
+	}
+
+	// 来到这里表示，下边的子树中的某些 Component 存在跟本次更新优先级一样的 Update 实例对象
+	if (__DEV__) {
+		console.warn('bailout 一个 fiber', wip);
+	}
+	cloneChildFibers(wip);
+	return wip.child;
+}
+
+/**
+ * 检查当前 fiber 节点是否含有跟本次更新优先级相同优先级的待执行的 Update 实例对象
+ *
+ * @param {FiberNode} current - 当前 fiber 节点在 current 树上的节点，使用 current 而不用 wip 的原因在于，wip.lanes 在 beginWork 中被赋值为了 NoLanes 了
+ * @param {Lane} renderLane - 本次更新的优先级 renderLane
+ * @returns {boolean} 返回值为 true 表示含有，为 false 表示不含有
+ */
+function checkScheduledUpdateOrContext(
+	current: FiberNode,
+	renderLane: Lane
+): boolean {
+	const updateLanes = current.lanes;
+
+	// 判断当前 Fiber 节点中待执行的 lanes 中是否包含本次更新的 renderLane
+	if (includeSomeLanes(updateLanes, renderLane)) {
+		// 当前 Fiber 中含有本次更新优先级的待执行的 Update 实例对象
+		return true;
+	}
+
+	return false;
+}
 
 /**
  * 針對 Suspense 類型組件的 update 操作
@@ -340,7 +452,21 @@ function updateFragment(wip: FiberNode) {
  * @param renderLane {Lane} 渲染优先级
  */
 function updateFunctionComponent(wip: FiberNode, renderLane: Lane) {
+	// 执行 render 进行状态计算
 	const nextChildren = renderWithHooks(wip, renderLane);
+
+	// 这里其实再给一个机会给这个 FunctionComponent 来进入 bailout 优化策略的
+	// 如果本次 Update 计算出来的结果跟上次结果一致的话，则会直接进入 bailout 逻辑
+
+	// 第一步中的状态计算可以知道是否命中了 bailout 逻辑
+	const current = wip.alternate;
+	// 注意这里的 didReceiveUpdate 比较关键，需要哪些地方对改变量进行了修改
+	if (current !== null && !didReceiveUpdate) {
+		// 命中了 bailout 优化策略
+		bailoutHook(wip, renderLane);
+		return bailoutOnAlreadyFinishedWork(wip, renderLane);
+	}
+
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
 }
@@ -359,22 +485,30 @@ function updateHostRoot(wip: FiberNode, renderLane: Lane) {
 	const pending = updateQueue.shared.pending;
 	// 获取最新的 Update 对象后置空
 	updateQueue.shared.pending = null;
+
+	const prevChildren = wip.memoizedState;
+
 	// 将原本的 state 和当前最新的 Update 对象进行比较，得到的结果是 ReactElementType 类型对象
 	// 这里的 memoizedState 相当于 <App/> 的 ReactElementType 对象
 	const { memoizedState } = processUpdateQueue(baseState, pending, renderLane);
+	// 将最新的 memoizedState 赋值给 wip 的 memoizedState 属性中
+	wip.memoizedState = memoizedState;
 
 	// 这里是防止 use Hook 没有包裹 Suspense 组件导致 fiber 树没有翻转
 	// 可以看 createWorkInProgress 方法中，创建 wip 的逻辑是将 current 的 memoizedState 赋值给 wip 的 memoizedState 变量
 	// 而这里由于 use Hook 的存在会导致 current 和 wip 树没有进行翻转，所以下次的 current 还是这次的 current 所以将需要更新 current 上的 memoizedState 变量
 	const current = wip.alternate;
 	if (current !== null) {
-		current.memoizedState = memoizedState;
+		if (!current.memoizedState) {
+			current.memoizedState = memoizedState;
+		}
 	}
 
-	// 将最新的 memoizedState 赋值给 wip 的 memoizedState 属性中
-	wip.memoizedState = memoizedState;
-
 	const nextChildren = wip.memoizedState;
+	// 这种情况同样认为是满足了 bailout 优化条件
+	if (prevChildren === nextChildren) {
+		return bailoutOnAlreadyFinishedWork(wip, renderLane);
+	}
 	// 将 wip 和 nextChildren 传给 reconcileChildren 函数用于生成子节点的 fiberNode
 	reconcileChildren(wip, nextChildren);
 	return wip.child;
