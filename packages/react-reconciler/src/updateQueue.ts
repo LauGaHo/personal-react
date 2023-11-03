@@ -8,6 +8,8 @@ export interface Update<State> {
 	action: Action<State>;
 	lane: Lane;
 	next: Update<any> | null;
+	hasEagerState: boolean;
+	eagerState: State | null;
 }
 
 // 定义 UpdateQueue
@@ -22,16 +24,22 @@ export interface UpdateQueue<State> {
  * 创建 Update 对象
  * @param action {Action<State>} 更新的 action 实例对象
  * @param lane {Lane} 更新的优先级
+ * @param hasEagerState 是否存在 eagerState
+ * @param eagerState {State | null} eagerState 的值
  * @template State
  */
 export const createUpdate = <State>(
 	action: Action<State>,
-	lane: Lane
+	lane: Lane,
+	hasEagerState = false,
+	eagerState: State | null = null
 ): Update<State> => {
 	return {
 		action,
 		lane,
-		next: null
+		next: null,
+		hasEagerState,
+		eagerState
 	};
 };
 
@@ -85,6 +93,24 @@ export const enqueueUpdate = <State>(
 		alternate.lanes = mergeLanes(alternate.lanes, lane);
 	}
 };
+
+/**
+ * 执行对应的 Action 操作
+ *
+ * @template State - 范型 State
+ * @param {State} state - 初始状态
+ * @param {Action<State>} action - 更新 Action 回调函数
+ * @returns 返回更新后的 State 值
+ */
+export function basicStateReducer<State>(state: State, action: Action<State>) {
+	if (action instanceof Function) {
+		// baseState = 1; update = (x) => 4x; => memoizedState = 4
+		return action(state);
+	} else {
+		// baseState = 1; update = 2; => memoizedState = 2
+		return action;
+	}
+}
 
 /**
  * 根据给定的 pendingUpdate 链表和 baseState 计算出最新的 memoizedState
@@ -162,12 +188,13 @@ export const processUpdateQueue = <State>(
 
 				// 获取 update 实例对象中的 action 属性
 				const action = pending.action;
-				if (action instanceof Function) {
-					// baseState = 1; update = (x) => 4x; => memoizedState = 4
-					newState = action(baseState);
+
+				if (pending.hasEagerState) {
+					// 如果当前的 Update 是 eagerState 的话，直接将 eagerState 赋值给 newState
+					newState = pending.eagerState;
 				} else {
-					// baseState = 1; update = 2; => memoizedState = 2
-					newState = action;
+					// 否则的话就是执行 action 计算操作
+					newState = basicStateReducer(baseState, action);
 				}
 			}
 			// 循环赋值变量 pending

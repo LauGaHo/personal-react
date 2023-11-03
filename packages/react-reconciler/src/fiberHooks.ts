@@ -8,11 +8,13 @@ import {
 	Lane,
 	mergeLanes,
 	NoLane,
+	NoLanes,
 	removeLanes,
 	requestUpdateLane
 } from './fiberLanes';
 import { HookHasEffect, Passive } from './hookEffectTags';
 import {
+	basicStateReducer,
 	createUpdate,
 	createUpdateQueue,
 	enqueueUpdate,
@@ -66,6 +68,8 @@ export interface Effect {
 // 声明 FCUpdateQueue 类型
 export interface FCUpdateQueue<State> extends UpdateQueue<State> {
 	lastEffect: Effect | null;
+	// 上次更新计算出来的 State
+	lastRenderedState: State;
 }
 
 // 声明 useEffect 回调函数的类型 EffectCallback
@@ -365,7 +369,7 @@ function updateState<State>(): [State, Dispatch<State>] {
 	const hook = updateWorkInProgressHook();
 
 	// 计算当前 useState 的 Hook 的最新值并赋值到 memoizedState 变量中
-	const queue = hook.updateQueue as UpdateQueue<State>;
+	const queue = hook.updateQueue as FCUpdateQueue<State>;
 	// 获取当前 hook 实例对象中的 baseState
 	const baseState = hook.baseState;
 
@@ -429,6 +433,8 @@ function updateState<State>(): [State, Dispatch<State>] {
 		hook.memoizedState = memoizedState;
 		hook.baseState = newBaseState;
 		hook.baseQueue = newBaseQueue;
+
+		queue.lastRenderedState = memoizedState;
 	}
 
 	return [hook.memoizedState, queue.dispatch as Dispatch<State>];
@@ -510,7 +516,7 @@ function mountState<State>(
 		memoizedState = initialState;
 	}
 	// 创建对应的 updateQueue
-	const queue = createUpdateQueue<State>();
+	const queue = createFCUpdateQueue<State>();
 	// 将 updateQueue 赋值到 Hook 实例对象中的 updateQueue
 	hook.updateQueue = queue;
 	// 更新当前 Hook 实例对象的最新值，也就是 memoizedState 属性
@@ -522,6 +528,8 @@ function mountState<State>(
 	// @ts-ignore
 	const dispatch = dispatchSetState.bind(null, currentlyRenderingFiber, queue);
 	queue.dispatch = dispatch;
+	// 为 lastRenderedState 赋值，EagerState 使用
+	queue.lastRenderedState = memoizedState;
 
 	return [memoizedState, dispatch];
 }
@@ -535,12 +543,38 @@ function mountState<State>(
  */
 function dispatchSetState<State>(
 	fiber: FiberNode,
-	updateQueue: UpdateQueue<State>,
+	updateQueue: FCUpdateQueue<State>,
 	action: Action<State>
 ) {
 	const lane = requestUpdateLane();
 	// 创建 update 对象
 	const update = createUpdate(action, lane);
+
+	// EagerState 策略
+	const current = fiber.alternate;
+	if (
+		fiber.lanes === NoLanes &&
+		(current === null || current.lanes === NoLanes)
+	) {
+		// 当前产生的 Update 是这个 fiber 的第一个 Update
+		// 1. 更新前的状态 2. 计算状态的方法
+		const currentState = updateQueue.lastRenderedState;
+		const eagerState = basicStateReducer(currentState, action);
+		update.hasEagerState = true;
+		update.eagerState = eagerState;
+
+		// 判断得出的 eagerState 是否和之前的 currentState 一致
+		if (Object.is(currentState, eagerState)) {
+			// 此处需要添加到 udpateQueue 的原因在于，后续如果需要更新的话，同样也是需要计算当前这个 Update 的状态的
+			enqueueUpdate(updateQueue, update, fiber, NoLane);
+			// 命中了 eagerState 逻辑
+			if (__DEV__) {
+				console.warn('命中 eagerState', fiber);
+			}
+			return;
+		}
+	}
+
 	// 将新创建的 update 对象放到 updateQueue 中
 	enqueueUpdate(updateQueue, update, fiber, lane);
 	// 从当前 fiberNode 开始调度更新
