@@ -10,6 +10,7 @@ export {
 	REACT_SUSPENSE_TYPE as Suspense
 } from 'shared/ReactSymbols';
 export { createContext } from './src/context';
+export { memo } from './src/memo';
 
 export const useState: Dispatcher['useState'] = (initialState) => {
 	const dispatcher = resolveDispatcher();

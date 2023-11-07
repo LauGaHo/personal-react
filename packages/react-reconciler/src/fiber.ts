@@ -4,6 +4,7 @@ import {
 	Fragment,
 	FunctionComponent,
 	HostComponent,
+	MemoComponent,
 	OffscreenComponent,
 	SuspenseComponent,
 	WorkTag
@@ -13,7 +14,11 @@ import { Container } from 'hostConfig';
 import { Lane, Lanes, NoLane, NoLanes } from './fiberLanes';
 import { Effect } from './fiberHooks';
 import { CallbackNode } from 'scheduler';
-import { REACT_PROVIDER_TYPE, REACT_SUSPENSE_TYPE } from 'shared/ReactSymbols';
+import {
+	REACT_MEMO_TYPE,
+	REACT_PROVIDER_TYPE,
+	REACT_SUSPENSE_TYPE
+} from 'shared/ReactSymbols';
 
 export interface OffscreentProps {
 	mode: 'visible' | 'hidden';
@@ -185,10 +190,23 @@ export function createFiberFromElement(element: ReactElementType): FiberNode {
 		fiberTag = HostComponent;
 	} else if (
 		// 对于 <ctx.Provider/> 它的 type 就为 { $$typeof: Symbol(react.provider) }
-		typeof type === 'object' &&
-		type.$$typeof === REACT_PROVIDER_TYPE
+		// 对于 React.memo() 它的 type 为 { $$typeof: Symbol(react.memo), ... }
+		typeof type === 'object'
 	) {
-		fiberTag = ContextProvider;
+		// 通过 $$typeof 来判断是 Provider 还是 Memo
+		switch (type.$$typeof) {
+			case REACT_PROVIDER_TYPE:
+				fiberTag = ContextProvider;
+				break;
+
+			case REACT_MEMO_TYPE:
+				fiberTag = MemoComponent;
+				break;
+
+			default:
+				console.warn('未定义的 type 类型', element);
+				break;
+		}
 	} else if (type === REACT_SUSPENSE_TYPE) {
 		fiberTag = SuspenseComponent;
 	} else if (typeof type !== 'function' && __DEV__) {

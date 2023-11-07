@@ -23,6 +23,7 @@ import {
 	HostComponent,
 	HostRoot,
 	HostText,
+	MemoComponent,
 	OffscreenComponent,
 	SuspenseComponent
 } from './workTags';
@@ -35,6 +36,7 @@ import {
 } from './fiberFlags';
 import { pushProvider } from './fiberContext';
 import { pushSuspenseHandler } from './suspenseContext';
+import { shallowEqual } from 'shared/shallowEquals';
 
 // 代表是否可以命中 bailout 优化策略，false 表示命中 bailout；true 表示没有命中 bailout
 let didReceiveUpdate = false;
@@ -116,7 +118,7 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 			return null;
 
 		case FunctionComponent:
-			return updateFunctionComponent(wip, renderLane);
+			return updateFunctionComponent(wip, wip.type, renderLane);
 
 		case Fragment:
 			return updateFragment(wip);
@@ -129,6 +131,9 @@ export const beginWork = (wip: FiberNode, renderLane: Lane) => {
 
 		case OffscreenComponent:
 			return updateOffscreenComponent(wip);
+
+		case MemoComponent:
+			return updateMemoComponent(wip, renderLane);
 
 		default:
 			if (__DEV__) {
@@ -415,6 +420,39 @@ function updateOffscreenComponent(wip: FiberNode) {
 }
 
 /**
+ * 针对 MemoComponent 类型的 Fiber 节点的 update 操作
+ *
+ * @param {FiberNode} wip - 当前工作单元
+ * @param {Lane} renderLane - 当前更新的优先级
+ */
+function updateMemoComponent(wip: FiberNode, renderLane: Lane) {
+	// bailout 四要素
+	// props 浅比较
+	const current = wip.alternate;
+	const nextProps = wip.pendingProps;
+	// 被 memo 包围的 Function Component 的函数
+	const Component = wip.type.type;
+
+	if (current !== null) {
+		const prevProps = current.memoizedProps;
+
+		// 浅比较
+		if (shallowEqual(prevProps, nextProps) && current.ref === wip.ref) {
+			// 表示可能命中了 bailout 逻辑
+			didReceiveUpdate = false;
+			wip.pendingProps = prevProps;
+			// 比较 state 和 context
+			if (!checkScheduledUpdateOrContext(current, renderLane)) {
+				// 满足了四要素
+				wip.lanes = current.lanes;
+				return bailoutOnAlreadyFinishedWork(wip, renderLane);
+			}
+		}
+	}
+	return updateFunctionComponent(wip, Component, renderLane);
+}
+
+/**
  * 针对 Context.Provider 类型 Fiber 节点的 update 操作
  * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
  */
@@ -451,9 +489,13 @@ function updateFragment(wip: FiberNode) {
  * @param wip {FiberNode} 当前工作单元 (workInProgress 指针所指 Fiber 节点)
  * @param renderLane {Lane} 渲染优先级
  */
-function updateFunctionComponent(wip: FiberNode, renderLane: Lane) {
+function updateFunctionComponent(
+	wip: FiberNode,
+	Component: FiberNode['type'],
+	renderLane: Lane
+) {
 	// 执行 render 进行状态计算
-	const nextChildren = renderWithHooks(wip, renderLane);
+	const nextChildren = renderWithHooks(wip, Component, renderLane);
 
 	// 这里其实再给一个机会给这个 FunctionComponent 来进入 bailout 优化策略的
 	// 如果本次 Update 计算出来的结果跟上次结果一致的话，则会直接进入 bailout 逻辑

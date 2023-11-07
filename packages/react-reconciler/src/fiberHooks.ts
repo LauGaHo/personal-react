@@ -82,7 +82,11 @@ type EffectDeps = any[] | null;
  * @param wip {FiberNode} workInProgress 树对应的 fiber 节点
  * @param lane {Lane} 优先级
  */
-export function renderWithHooks(wip: FiberNode, lane: Lane) {
+export function renderWithHooks(
+	wip: FiberNode,
+	Component: FiberNode['type'],
+	lane: Lane
+) {
 	// 执行赋值操作
 	currentlyRenderingFiber = wip;
 	// 重置操作，重置 hooks 链表
@@ -102,7 +106,6 @@ export function renderWithHooks(wip: FiberNode, lane: Lane) {
 		currentDispatcher.current = HooksDispatcherOnMount;
 	}
 
-	const Component = wip.type;
 	const props = wip.pendingProps;
 	const children = Component(props);
 
